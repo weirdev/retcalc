@@ -1,8 +1,8 @@
-from typing import *
+from typing import List, Optional, Tuple, TypeVar
 
 T = TypeVar('T')
 
-def choose(opts: List[Tuple[str, T]]) -> T:
+def choose(opts: List[Tuple[str, T]]) -> Optional[T]:
     if len(opts) == 0:
         return None
     elif len(opts) == 1:
@@ -22,7 +22,7 @@ def choose(opts: List[Tuple[str, T]]) -> T:
 
         s = input("Invalid input, please input a number in the list")
 
-def takeint(prompt, lbound: float = None, ubound: float = None) -> int:
+def takeint(prompt, lbound: Optional[float] = None, ubound: Optional[float] = None) -> int:
     slb = lbound if lbound is not None else "-inf"
     sub = ubound if ubound is not None else "inf"
 
@@ -38,7 +38,7 @@ def takeint(prompt, lbound: float = None, ubound: float = None) -> int:
         except:
             s = input("Not a valid integer\nEnter a valid integer: ")
 
-def takefloat(prompt, lbound: float = None, ubound: float = None) -> float:
+def takefloat(prompt, lbound: Optional[float] = None, ubound: Optional[float] = None) -> float:
     slb = lbound if lbound is not None else "-inf"
     sub = ubound if ubound is not None else "inf"
 
