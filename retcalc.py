@@ -1,7 +1,10 @@
-from typing import List, Tuple
+from typing import Any, List, Tuple
 import random
 
 from prompt import takefloat, takeint
+
+RVarsTup = Tuple[float, float, float, float, Tuple[float, float], Tuple[float, float], int]
+RVarsMut = List[Any]
 
 def inflated_val(val: float, r: float, t: int):
     return val * ((1 + r)**t)
@@ -13,7 +16,7 @@ def inflated_payments(payment: float, r: float, t: int) -> float:
     return total
     
 
-def retirement_value(expendature, emergency, fixed, equity, inflation, eret, t) -> Tuple:
+def retirement_value(expendature, emergency, fixed, equity, inflation, eret, t) -> RVarsTup:
     inflation_s = random.gauss(*inflation)
     eret_s = random.gauss(*eret)
     equity = (equity - expendature) * (1  + eret_s)
@@ -26,7 +29,7 @@ def retirement_value(expendature, emergency, fixed, equity, inflation, eret, t) 
         return (expendature, emergency, fixed, equity, inflation, eret, t)
     
 
-def simulate(rconfig: Tuple, n: int):
+def simulate(rconfig: RVarsTup | RVarsMut, n: int) -> List[RVarsTup]:
     results = []
     for _ in range(n):
         results.append(retirement_value(*rconfig))
@@ -35,26 +38,26 @@ def simulate(rconfig: Tuple, n: int):
 """
 pmin = tail probablility, ie. 1/100 worst case
 """
-def worst_case(runs: List[float], pmin: float):
+def worst_case(runs: List[RVarsTup], pmin: float):
     runs = sorted(runs, key=lambda x: x[1] + x[2] + x[3])
     return runs[int(len(runs) * pmin)]
 
 
-def max_expendature(rconfig: Tuple, pmin: float) -> float:
-    rconfig = list(rconfig)
+def max_expendature(rconfig: RVarsTup, r_var_to_opt: int, pmin: float) -> float:
+    rconfiglst = list(rconfig)
     low = 0
-    high = 1000
+    high = 100
 
-    rconfig[0] = high
-    while worst_case(simulate(rconfig, 10_000), pmin)[3] > 0:
+    rconfiglst[r_var_to_opt] = high
+    while worst_case(simulate(rconfiglst, 10_000), pmin)[3] > 0:
         high = high * 2
-        rconfig[0] = high
+        rconfiglst[r_var_to_opt] = high
 
     diff = high
     while diff > 100:
         mid = low + (diff / 2)
-        rconfig[0] = mid
-        if worst_case(simulate(rconfig, 10_000), pmin)[3] < 0:
+        rconfiglst[r_var_to_opt] = mid
+        if worst_case(simulate(rconfiglst, 10_000), pmin)[3] < 0:
             high = mid
         else:
             low = mid
@@ -98,5 +101,5 @@ if __name__ == '__main__':
 
     print()
     print("Binary searching possible retirement scenarios 10,000 times each...")
-    maxexp = max_expendature((None, emergency, fixed, retwealth - emergency - fixed, inflation, eret, t), wcp)
+    maxexp = max_expendature((0, emergency, fixed, retwealth - emergency - fixed, inflation, eret, t), 0, wcp)
     print(f"Maximum safe yearly expendature in retirement: ${maxexp:,.2f}")
