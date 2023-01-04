@@ -1,17 +1,19 @@
-from prompt import takefloat, takeint
+from typing import List, Tuple
 import random
 
-def inflated_val(val, r, t):
+from prompt import takefloat, takeint
+
+def inflated_val(val: float, r: float, t: int):
     return val * ((1 + r)**t)
 
-def inflated_payments(payment, r, t):
+def inflated_payments(payment: float, r: float, t: int) -> float:
     total = 0
     for i in range(t):
         total += inflated_val(payment, r, i)
     return total
     
 
-def retirement_value(expendature, emergency, fixed, equity, inflation, eret, t):
+def retirement_value(expendature, emergency, fixed, equity, inflation, eret, t) -> Tuple:
     inflation_s = random.gauss(*inflation)
     eret_s = random.gauss(*eret)
     equity = (equity - expendature) * (1  + eret_s)
@@ -24,7 +26,7 @@ def retirement_value(expendature, emergency, fixed, equity, inflation, eret, t):
         return (expendature, emergency, fixed, equity, inflation, eret, t)
     
 
-def simulate(rconfig, n):
+def simulate(rconfig: Tuple, n: int):
     results = []
     for _ in range(n):
         results.append(retirement_value(*rconfig))
@@ -33,12 +35,12 @@ def simulate(rconfig, n):
 """
 pmin = tail probablility, ie. 1/100 worst case
 """
-def worst_case(runs, pmin):
+def worst_case(runs: List[float], pmin: float):
     runs = sorted(runs, key=lambda x: x[1] + x[2] + x[3])
     return runs[int(len(runs) * pmin)]
 
 
-def max_expendature(rconfig, pmin):
+def max_expendature(rconfig: Tuple, pmin: float) -> float:
     rconfig = list(rconfig)
     low = 0
     high = 1000
@@ -70,8 +72,7 @@ def r_val_print(expendature, emergency, fixed, equity, inflation, eret, t):
     print(f"Inflation stdev: {inflation[1]*100:.2f}%")
     print(f"Equity return mean: {eret[0]*100:.2f}%")
     print(f"Equity return stdev: {eret[1]*100:.2f}%")
-    print(f"Years left: {t}")
-        
+    print(f"Years left: {t}")     
     
         
 if __name__ == '__main__':
