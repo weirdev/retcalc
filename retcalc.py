@@ -43,13 +43,13 @@ def worst_case(runs: List[RVarsTup], pmin: float):
     return runs[int(len(runs) * pmin)]
 
 
-def max_expendature(rconfig: RVarsTup, r_var_to_opt: int, pmin: float) -> float:
+def optimize_r_var(rconfig: RVarsTup, r_var_to_opt: int, maximize: bool, pmin: float) -> float:
     rconfiglst = list(rconfig)
     low = 0
     high = 100
 
     rconfiglst[r_var_to_opt] = high
-    while worst_case(simulate(rconfiglst, 10_000), pmin)[3] > 0:
+    while (worst_case(simulate(rconfiglst, 10_000), pmin)[3] < 0) ^ maximize:
         high = high * 2
         rconfiglst[r_var_to_opt] = high
 
@@ -57,7 +57,7 @@ def max_expendature(rconfig: RVarsTup, r_var_to_opt: int, pmin: float) -> float:
     while diff > 100:
         mid = low + (diff / 2)
         rconfiglst[r_var_to_opt] = mid
-        if worst_case(simulate(rconfiglst, 10_000), pmin)[3] < 0:
+        if (worst_case(simulate(rconfiglst, 10_000), pmin)[3] > 0) ^ maximize:
             high = mid
         else:
             low = mid
@@ -101,5 +101,5 @@ if __name__ == '__main__':
 
     print()
     print("Binary searching possible retirement scenarios 10,000 times each...")
-    maxexp = max_expendature((0, emergency, fixed, retwealth - emergency - fixed, inflation, eret, t), 0, wcp)
+    maxexp = optimize_r_var((0, emergency, fixed, retwealth - emergency - fixed, inflation, eret, t), 0, True, wcp)
     print(f"Maximum safe yearly expendature in retirement: ${maxexp:,.2f}")
