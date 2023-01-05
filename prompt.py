@@ -9,13 +9,13 @@ def choose(opts: List[Tuple[str, T]]) -> Optional[T]:
         return opts[0][1]
 
     for i, o in enumerate(opts):
-        print(f"{i}. {o}")
+        print(f"{i}. {o[0]}")
 
     s = input("Choose an option: ")
     while True:
         try:
             idx = int(s)
-            if idx < len(opts) and idx > 0:
+            if idx < len(opts) and idx >= 0:
                 return opts[idx][1]
         except:
             pass
