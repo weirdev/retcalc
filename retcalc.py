@@ -1,6 +1,6 @@
+import random
 from enum import Enum
 from typing import Any, Callable, List
-import random
 
 from prompt import choose, takefloat, takeint
 
@@ -81,9 +81,13 @@ def retirement_value(retirementSettings: RetirementSettings) -> RetirementSettin
     fixed = retirementSettings.fixed * (1 + retirementSettings.inflation[0])
 
     if retirementSettings.t > 0:
-        return retirement_value(RetirementSettings(expendature, retirementSettings.emergency, fixed, equity, retirementSettings.inflation, retirementSettings.eret, retirementSettings.t - 1))
+        return retirement_value(RetirementSettings(expendature, retirementSettings.emergency, fixed,
+                                                   equity, retirementSettings.inflation,
+                                                   retirementSettings.eret, retirementSettings.t - 1))
     else:
-        return RetirementSettings(expendature, retirementSettings.emergency, fixed, equity, retirementSettings.inflation, retirementSettings.eret, retirementSettings.t)
+        return RetirementSettings(expendature, retirementSettings.emergency, fixed, equity,
+                                  retirementSettings.inflation, retirementSettings.eret,
+                                  retirementSettings.t)
 
 
 def simulate(retirementSettings: RetirementSettings, n: int) -> List[RetirementSettings]:
@@ -95,13 +99,14 @@ def simulate(retirementSettings: RetirementSettings, n: int) -> List[RetirementS
 
 def worst_case(runs: List[RetirementSettings], pmin: float):
     """
-pmin = tail probablility, ie. 1/100 worst case
-"""
+    pmin = tail probablility, ie. 1/100 worst case
+    """
     runs = sorted(runs, key=lambda rs: rs.emergency + rs.fixed + rs.equity)
     return runs[int(len(runs) * pmin)]
 
 
-def optimize_r_var(retirementSettings: RetirementSettings, r_var_to_opt: RSetting, maximize: bool, pmin: float) -> float:
+def optimize_r_var(retirementSettings: RetirementSettings, r_var_to_opt: RSetting, maximize: bool,
+                   pmin: float) -> float:
     low = 0
     high = 100
 
