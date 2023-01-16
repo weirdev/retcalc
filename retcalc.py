@@ -16,7 +16,7 @@ class RSetting(Enum):
 
 
 class RetirementSettings:
-    def __init__(self, expendature, emergency, fixed, equity, inflation, eret, t):
+    def __init__(self, expendature, emergency, fixed, equity, inflation, eret, t, emergency_min):
         self.expendature = expendature
         self.emergency = emergency
         self.fixed = fixed
@@ -24,6 +24,7 @@ class RetirementSettings:
         self.inflation = inflation
         self.eret = eret
         self.t = t
+        self.emergency_min = emergency_min
 
     def update_val(self, rsetting: RSetting, op: Callable[[Any], Any]):
         if rsetting == RSetting.EXPENDATURE:
@@ -60,6 +61,10 @@ class RetirementSettings:
     def current_value(self):
         return self.emergency + self.fixed + self.equity
 
+    def copy(self) -> 'RetirementSettings':
+        return RetirementSettings(self.expendature, self.emergency, self.fixed, self.equity,
+                                  self.inflation, self.eret, self.t, self.emergency_min)
+
 
 def inflated_val(val: float, r: float, t: int):
     return val * ((1 + r)**t)
@@ -75,19 +80,41 @@ def inflated_payments(payment: float, r: float, t: int) -> float:
 def retirement_value(retirementSettings: RetirementSettings) -> RetirementSettings:
     inflation_s = random.gauss(*retirementSettings.inflation)
     eret_s = random.gauss(*retirementSettings.eret)
+
     equity = (retirementSettings.equity -
-              retirementSettings.expendature) * (1 + eret_s)
+              retirementSettings.expendature)
+    fixed = retirementSettings.fixed
+    emergency = retirementSettings.emergency
+    if equity < 0:
+        fixed += equity
+        equity = 0
+    elif retirementSettings.emergency_min is not None and emergency < retirementSettings.emergency_min:
+        refill_emf = min(equity, retirementSettings.emergency_min - emergency)
+        emergency += refill_emf
+        equity -= refill_emf
+    equity *= (1 + eret_s)
+    if fixed < 0:
+        emergency += fixed
+        fixed = 0
+    elif retirementSettings.emergency_min is not None and emergency < retirementSettings.emergency_min:
+        refill_emf = min(fixed, retirementSettings.emergency_min - emergency)
+        emergency += refill_emf
+        fixed -= refill_emf
+    # Assume fixed income assets simply keep pace with inflation
+    fixed = retirementSettings.fixed * (1 + inflation_s)
     expendature = retirementSettings.expendature * (1 + inflation_s)
-    fixed = retirementSettings.fixed * (1 + retirementSettings.inflation[0])
+
+    new_rs = retirementSettings.copy()
+    new_rs.update_val(RSetting.EXPENDATURE, lambda _: expendature)
+    new_rs.update_val(RSetting.EMERGENCY, lambda _: emergency)
+    new_rs.update_val(RSetting.FIXED, lambda _: fixed)
+    new_rs.update_val(RSetting.EQUITY, lambda _: equity)
 
     if retirementSettings.t > 0:
-        return retirement_value(RetirementSettings(expendature, retirementSettings.emergency, fixed,
-                                                   equity, retirementSettings.inflation,
-                                                   retirementSettings.eret, retirementSettings.t - 1))
+        new_rs.update_val(RSetting.T, lambda t: t - 1)
+        return retirement_value(new_rs)
     else:
-        return RetirementSettings(expendature, retirementSettings.emergency, fixed, equity,
-                                  retirementSettings.inflation, retirementSettings.eret,
-                                  retirementSettings.t)
+        return new_rs
 
 
 def simulate(retirementSettings: RetirementSettings, n: int) -> List[RetirementSettings]:
@@ -112,7 +139,8 @@ def optimize_r_var(retirementSettings: RetirementSettings, r_var_to_opt: RSettin
 
     # Find top end of range
     retirementSettings.update_val(r_var_to_opt, lambda _: high)
-    while (worst_case(simulate(retirementSettings, 10_000), pmin).equity < 0) ^ maximize:
+    while (worst_case(simulate(retirementSettings, 10_000), pmin).current_value() - 
+            retirementSettings.emergency_min < 0) ^ maximize:
         # TODO: Update low to previous high
         high = high * 2
         retirementSettings.update_val(r_var_to_opt, lambda _: high)
@@ -121,7 +149,8 @@ def optimize_r_var(retirementSettings: RetirementSettings, r_var_to_opt: RSettin
     while diff > 100:
         mid = low + (diff / 2)
         retirementSettings.update_val(r_var_to_opt, lambda _: mid)
-        if (worst_case(simulate(retirementSettings, 10_000), pmin).equity > 0) ^ maximize:
+        if (worst_case(simulate(retirementSettings, 10_000), pmin).current_value() - 
+                retirementSettings.emergency_min > 0) ^ maximize:
             high = mid
         else:
             low = mid
@@ -161,7 +190,7 @@ def safe_ret_expenditure_prompt():
         "Enter tail probability for Monte Carlo simulation (<0.5=worse than average result)", 0, 1)
     print("Simulating 10,000 possible scenarios...")
     runs = simulate(RetirementSettings(expenditure, 0, fixed, equity,
-                    inflation, eret, t), 10_000)
+                    inflation, eret, t, 0), 10_000)
     retwealth = worst_case(runs, wcp).current_value()
     print(f"Estimated new worth at end of earning years: ${retwealth:,.2f}")
 
@@ -173,7 +202,8 @@ def safe_ret_expenditure_prompt():
     print()
     print("Binary searching possible retirement scenarios 10,000 times each...")
     maxexp = optimize_r_var(RetirementSettings(0, emergency, fixed, retwealth -
-                            emergency - fixed, inflation, eret, t), RSetting.EXPENDATURE, True, wcp)
+                            emergency - fixed, inflation, eret, t, emergency),
+                            RSetting.EXPENDATURE, True, wcp)
     print(f"Maximum safe yearly expendature in retirement: ${maxexp:,.2f}")
 
 
@@ -191,7 +221,7 @@ def savings_required_for_expenditure_prompt():
     print()
     print("Binary searching possible retirement scenarios 10,000 times each...")
     maxexp = optimize_r_var(
-        RetirementSettings(expenditure, 0, 0, 0, inflation, eret, t), RSetting.EQUITY, False, wcp)
+        RetirementSettings(expenditure, 0, 0, 0, inflation, eret, t, 0), RSetting.EQUITY, False, wcp)
     print(f"Minimum safe equity savings for retirement: ${maxexp:,.2f}")
 
 
