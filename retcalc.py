@@ -5,6 +5,13 @@ from typing import Any, Callable, List
 from prompt import choose, takefloat, takeint
 
 
+class Asset:
+    def __init__(self, value, mean_return, return_stdev):
+        self.value = value
+        self.mean_return = mean_return
+        self.return_stdev = return_stdev
+
+
 class RSetting(Enum):
     EXPENDATURE = 1
     EMERGENCY = 2
@@ -13,10 +20,12 @@ class RSetting(Enum):
     INFLATION = 5
     ERET = 6
     T = 7
+    EMERGENCY_MIN = 8
+    ASSETS = 9
 
 
 class RetirementSettings:
-    def __init__(self, expendature, emergency, fixed, equity, inflation, eret, t, emergency_min):
+    def __init__(self, expendature, emergency, fixed, equity, inflation, eret, t, emergency_min, assets):
         self.expendature = expendature
         self.emergency = emergency
         self.fixed = fixed
@@ -25,6 +34,7 @@ class RetirementSettings:
         self.eret = eret
         self.t = t
         self.emergency_min = emergency_min
+        self.assets = assets
 
     def update_val(self, rsetting: RSetting, op: Callable[[Any], Any]):
         if rsetting == RSetting.EXPENDATURE:
@@ -41,6 +51,10 @@ class RetirementSettings:
             self.eret = op(self.eret)
         elif rsetting == RSetting.T:
             self.t = op(self.t)
+        elif rsetting == RSetting.EMERGENCY_MIN:
+            self.emergency_min = op(self.emergency_min)
+        elif rsetting == RSetting.ASSETS:
+            self.assets = op(self.assets)
 
     def get_val(self, rsetting: RSetting):
         if rsetting == RSetting.EXPENDATURE:
@@ -57,13 +71,17 @@ class RetirementSettings:
             return self.eret
         elif rsetting == RSetting.T:
             return self.t
+        elif rsetting == RSetting.EMERGENCY_MIN:
+            return self.emergency_min
+        elif rsetting == RSetting.ASSETS:
+            return self.assets
 
     def current_value(self):
-        return self.emergency + self.fixed + self.equity
+        return self.emergency + self.fixed + self.equity + sum(map(lambda a: a.value, self.assets))
 
     def copy(self) -> 'RetirementSettings':
         return RetirementSettings(self.expendature, self.emergency, self.fixed, self.equity,
-                                  self.inflation, self.eret, self.t, self.emergency_min)
+                                  self.inflation, self.eret, self.t, self.emergency_min, self.assets)
 
 
 def inflated_val(val: float, r: float, t: int):
@@ -190,7 +208,7 @@ def safe_ret_expenditure_prompt():
         "Enter tail probability for Monte Carlo simulation (<0.5=worse than average result)", 0, 1)
     print("Simulating 10,000 possible scenarios...")
     runs = simulate(RetirementSettings(expenditure, 0, fixed, equity,
-                    inflation, eret, t, 0), 10_000)
+                    inflation, eret, t, 0, []), 10_000)
     retwealth = worst_case(runs, wcp).current_value()
     print(f"Estimated new worth at end of earning years: ${retwealth:,.2f}")
 
@@ -202,7 +220,7 @@ def safe_ret_expenditure_prompt():
     print()
     print("Binary searching possible retirement scenarios 10,000 times each...")
     maxexp = optimize_r_var(RetirementSettings(0, emergency, fixed, retwealth -
-                            emergency - fixed, inflation, eret, t, emergency),
+                            emergency - fixed, inflation, eret, t, emergency, []),
                             RSetting.EXPENDATURE, True, wcp)
     print(f"Maximum safe yearly expendature in retirement: ${maxexp:,.2f}")
 
@@ -221,7 +239,7 @@ def savings_required_for_expenditure_prompt():
     print()
     print("Binary searching possible retirement scenarios 10,000 times each...")
     maxexp = optimize_r_var(
-        RetirementSettings(expenditure, 0, 0, 0, inflation, eret, t, 0), RSetting.EQUITY, False, wcp)
+        RetirementSettings(expenditure, 0, 0, 0, inflation, eret, t, 0, []), RSetting.EQUITY, False, wcp)
     print(f"Minimum safe equity savings for retirement: ${maxexp:,.2f}")
 
 
