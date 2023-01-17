@@ -75,11 +75,7 @@ class AssetAllocation:
 
 class RSetting(Enum):
     EXPENDATURE = 1
-    EMERGENCY = 2
-    FIXED = 3
-    EQUITY = 4
     INFLATION = 5
-    ERET = 6
     T = 7
     EMERGENCY_MIN = 8
     ASSET_ALLOCATIONS = 9
@@ -92,14 +88,10 @@ class RValue:
 
 
 class RetirementSettings:
-    def __init__(self, expendature, emergency, fixed, equity, inflation: Tuple[float, float],
-                 eret: Tuple[float, float], t: int, emergency_min, asset_allocations: List[AssetAllocation]):
+    def __init__(self, expendature, inflation: Tuple[float, float],
+                 t: int, emergency_min, asset_allocations: List[AssetAllocation]):
         self.expendature = expendature
-        self.emergency = emergency
-        self.fixed = fixed
-        self.equity = equity
         self.inflation = inflation
-        self.eret = eret
         self.t = t
         self.emergency_min = emergency_min
         asset_allocations.sort(key=lambda a: a.priority)
@@ -109,16 +101,8 @@ class RetirementSettings:
         rsetting = rvalue.rsetting
         if rsetting == RSetting.EXPENDATURE:
             self.expendature = op(self.expendature)
-        elif rsetting == RSetting.EMERGENCY:
-            self.emergency = op(self.emergency)
-        elif rsetting == RSetting.FIXED:
-            self.fixed = op(self.fixed)
-        elif rsetting == RSetting.EQUITY:
-            self.equity = op(self.equity)
         elif rsetting == RSetting.INFLATION:
             self.inflation = op(self.inflation)
-        elif rsetting == RSetting.ERET:
-            self.eret = op(self.eret)
         elif rsetting == RSetting.T:
             self.t = op(self.t)
         elif rsetting == RSetting.EMERGENCY_MIN:
@@ -133,16 +117,8 @@ class RetirementSettings:
     def get_val(self, rsetting: RSetting):
         if rsetting == RSetting.EXPENDATURE:
             return self.expendature
-        elif rsetting == RSetting.EMERGENCY:
-            return self.emergency
-        elif rsetting == RSetting.FIXED:
-            return self.fixed
-        elif rsetting == RSetting.EQUITY:
-            return self.equity
         elif rsetting == RSetting.INFLATION:
             return self.inflation
-        elif rsetting == RSetting.ERET:
-            return self.eret
         elif rsetting == RSetting.T:
             return self.t
         elif rsetting == RSetting.EMERGENCY_MIN:
@@ -151,11 +127,11 @@ class RetirementSettings:
             return self.asset_allocations
 
     def current_value(self):
-        return self.emergency + self.fixed + self.equity + sum(map(lambda a: a.asset.value, self.asset_allocations))
+        return sum(map(lambda a: a.asset.value, self.asset_allocations))
 
     def copy(self) -> 'RetirementSettings':
-        return RetirementSettings(self.expendature, self.emergency, self.fixed, self.equity,
-                                  self.inflation, self.eret, self.t, self.emergency_min,
+        return RetirementSettings(self.expendature, self.inflation, self.t,
+                                  self.emergency_min,
                                   [a.copy() for a in self.asset_allocations])
 
 
@@ -174,49 +150,18 @@ def retirement_value(retirementSettings: RetirementSettings) -> RetirementSettin
     inflation_s = random.gauss(*retirementSettings.inflation)
 
     new_rs = retirementSettings.copy()
-    if len(retirementSettings.asset_allocations) == 0:
-        eret_s = random.gauss(*retirementSettings.eret)
 
-        equity = (retirementSettings.equity -
-                  retirementSettings.expendature)
-        fixed = retirementSettings.fixed
-        emergency = retirementSettings.emergency
-        if equity < 0:
-            fixed += equity
-            equity = 0
-        elif retirementSettings.emergency_min is not None and emergency < retirementSettings.emergency_min:
-            refill_emf = min(
-                equity, retirementSettings.emergency_min - emergency)
-            emergency += refill_emf
-            equity -= refill_emf
-        if fixed < 0:
-            emergency += fixed
-            fixed = 0
-        elif retirementSettings.emergency_min is not None and emergency < retirementSettings.emergency_min:
-            refill_emf = min(
-                fixed, retirementSettings.emergency_min - emergency)
-            emergency += refill_emf
-            fixed -= refill_emf
-
-        equity *= (1 + eret_s)
-        # Assume fixed income assets simply keep pace with inflation
-        fixed *= (1 + inflation_s)
-
-        new_rs.emergency = emergency
-        new_rs.fixed = fixed
-        new_rs.equity = equity
-    else:
-        to_spend = retirementSettings.expendature
-        for ri, asset_alloc in enumerate(reversed(new_rs.asset_allocations)):
-            if ri == len(new_rs.asset_allocations) - 1:
-                # If on last asset, we can go negative
-                spent = to_spend
-            else:
-                spent = min(asset_alloc.asset.value, to_spend)
-            asset_alloc.asset.value -= spent
-            to_spend -= spent
-            asset_alloc.asset.value *= (1 + random.gauss(asset_alloc.asset.mean_return,
-                                                         asset_alloc.asset.return_stdev))
+    to_spend = retirementSettings.expendature
+    for ri, asset_alloc in enumerate(reversed(new_rs.asset_allocations)):
+        if ri == len(new_rs.asset_allocations) - 1:
+            # If on last asset, we can go negative
+            spent = to_spend
+        else:
+            spent = min(asset_alloc.asset.value, to_spend)
+        asset_alloc.asset.value -= spent
+        to_spend -= spent
+        asset_alloc.asset.value *= (1 + random.gauss(asset_alloc.asset.mean_return,
+                                                     asset_alloc.asset.return_stdev))
 
     new_rs.expendature *= (1 + inflation_s)
 
@@ -237,7 +182,7 @@ def worst_case(runs: List[RetirementSettings], pmin: float):
     """
     pmin = tail probablility, ie. 1/100 worst case
     """
-    runs = sorted(runs, key=lambda rs: rs.emergency + rs.fixed + rs.equity)
+    runs = sorted(runs, key=lambda rs: rs.current_value())
     return runs[int(len(runs) * pmin)]
 
 
@@ -288,13 +233,8 @@ def r_val_print(retirementSettings: RetirementSettings):
         print(
             f"\tPreferred fraction of priority class: {alloc.preferred_fraction_of_priority_class*100:.2f}%")
         print()
-    print(f"Emergency: ${retirementSettings.emergency:,.2f}")
-    print(f"Fixed Income: ${retirementSettings.fixed:,.2f}")
-    print(f"Equity: ${retirementSettings.equity:,.2f}")
     print(f"Inflation mean: {retirementSettings.inflation[0]*100:.2f}%")
     print(f"Inflation stdev: {retirementSettings.inflation[1]*100:.2f}%")
-    print(f"Equity return mean: {retirementSettings.eret[0]*100:.2f}%")
-    print(f"Equity return stdev: {retirementSettings.eret[1]*100:.2f}%")
     print(f"Years left: {retirementSettings.t}")
 
 
@@ -352,8 +292,8 @@ def safe_ret_expenditure_prompt():
     wcp = takefloat(
         "Enter tail probability for Monte Carlo simulation (<0.5=worse than average result)", 0, 1)
     print("Simulating 10,000 possible scenarios...")
-    runs = simulate(RetirementSettings(expenditure, 0, 0, 0,
-                    inflation, (0, 0), t, 0, allocations), 10_000)
+    runs = simulate(RetirementSettings(expenditure, inflation, t, 0, allocations),
+                    10_000)
     result_setting = worst_case(runs, wcp)
 
     retwealth = result_setting.current_value()
@@ -386,7 +326,7 @@ def savings_required_for_expenditure_prompt():
     print()
     print("Binary searching possible retirement scenarios 10,000 times each...")
     maxexp = optimize_r_var(
-        RetirementSettings(expenditure, 0, 0, 0, inflation, (0, 0), t, 0,
+        RetirementSettings(expenditure, inflation, t, 0,
                            [AssetAllocation(Asset("Equities", 0, eret[0], eret[1]), 0, 0, 0)]),
         RValue(RSetting.ASSET_ALLOCATIONS,
                (0, AllocationValue(AllocationSetting.ASSET, AssetSetting.VALUE))),
