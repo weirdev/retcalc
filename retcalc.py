@@ -260,7 +260,7 @@ def optimize_r_var(retirementSettings: RetirementSettings, r_var_to_opt: RValue,
         retirementSettings.update_val(r_var_to_opt, lambda _: high)
 
     diff = high
-    while diff > 100:
+    while diff > 100: # TODO: Make relative to mid
         # r_val_print(retirementSettings)
         # input()
         mid = low + (diff / 2)
@@ -322,40 +322,24 @@ def choose_priority(asset_allocations: List[AssetAllocation]) -> int:
 
 def safe_ret_expenditure_prompt():
     t = takeint("Whole number of remaining earning years from today", lbound=1)
-    new_asset_alloc = choose(
-        [("Old assets allocations", False), ("New asset allocations", True)])
-    if new_asset_alloc:
-        fixed = 0
-        equity = 0
-        expenditure = 0
-        eret = (0, 0)
 
-        allocations = []
-        add_asset = True
-        while add_asset:
-            print()
-            print("Adding new asset")
-            name = input("Asset name: ")
-            value = takefloat(f"Amount invested in {name}", lbound=0)
-            mean_return = takefloat(
-                f"Enter estimated mean {name} return over this period", -1, 1)
-            return_stdev = takefloat(
-                f"Enter estimated {name} return standard deviation over this period", 0, 1)
-            asset = Asset(name, value, mean_return, return_stdev)
+    allocations = []
+    add_asset = True
+    while add_asset:
+        print()
+        print("Adding new asset")
+        name = input("Asset name: ")
+        value = takefloat(f"Amount invested in {name}", lbound=0)
+        mean_return = takefloat(
+            f"Enter estimated mean {name} return over this period", -1, 1)
+        return_stdev = takefloat(
+            f"Enter estimated {name} return standard deviation over this period", 0, 1)
+        asset = Asset(name, value, mean_return, return_stdev)
 
-            allocations.append(AssetAllocation(
-                asset, choose_priority(allocations), 0, 0))
-            add_asset = choose(
-                [("Add another asset", True), ("Finished adding assets", False)])
-    else:
-        allocations = []
-
-        fixed = takefloat(
-            "Enter current amount invested in fixed income assets ($)", lbound=0)
-        equity = takefloat(
-            "Enter current amount invested in equities ($)", lbound=0)
-        eret = (takefloat("Enter estimated mean equity return over this period", -1, 1),
-                takefloat("Enter estimated equity return standard deviation over this period", 0, 1))
+        allocations.append(AssetAllocation(
+            asset, choose_priority(allocations), 0, 0))
+        add_asset = choose(
+            [("Add another asset", True), ("Finished adding assets", False)])
     print()
     expenditure = - \
         takefloat(
@@ -367,8 +351,8 @@ def safe_ret_expenditure_prompt():
     wcp = takefloat(
         "Enter tail probability for Monte Carlo simulation (<0.5=worse than average result)", 0, 1)
     print("Simulating 10,000 possible scenarios...")
-    runs = simulate(RetirementSettings(expenditure, 0, fixed, equity,
-                    inflation, eret, t, 0, allocations), 10_000)
+    runs = simulate(RetirementSettings(expenditure, 0, 0, 0,
+                    inflation, (0, 0), t, 0, allocations), 10_000)
     result_setting = worst_case(runs, wcp)
 
     retwealth = result_setting.current_value()
@@ -376,24 +360,14 @@ def safe_ret_expenditure_prompt():
 
     print()
     t = takeint("Enter estimated whole number of years of retirement", lbound=1)
-    if not new_asset_alloc:
-        emergency = takefloat(
-            "Enter retirement emergency fund size", 0, int(retwealth))
-    else:
-        emergency = 0
 
     print()
     print("Binary searching possible retirement scenarios 10,000 times each...")
-    if new_asset_alloc:
-        retirement_start = result_setting.copy()
-        retirement_start.expendature = 0
-        retirement_start.t = t
-        maxexp = optimize_r_var(retirement_start, RValue(
-            RSetting.EXPENDATURE), True, wcp)
-    else:
-        maxexp = optimize_r_var(RetirementSettings(0, emergency, fixed, retwealth -
-                                emergency - fixed, inflation, eret, t, emergency, []),
-                                RValue(RSetting.EXPENDATURE), True, wcp)
+    retirement_start = result_setting.copy()
+    retirement_start.expendature = 0
+    retirement_start.t = t
+    maxexp = optimize_r_var(retirement_start, RValue(
+        RSetting.EXPENDATURE), True, wcp)
     print(f"Maximum safe yearly expendature in retirement: ${maxexp:,.2f}")
 
 
