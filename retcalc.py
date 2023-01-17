@@ -92,8 +92,8 @@ class RValue:
 
 
 class RetirementSettings:
-    def __init__(self, expendature, emergency, fixed, equity, inflation: Tuple[float, float], 
-                eret: Tuple[float, float], t: int, emergency_min, asset_allocations: List[AssetAllocation]):
+    def __init__(self, expendature, emergency, fixed, equity, inflation: Tuple[float, float],
+                 eret: Tuple[float, float], t: int, emergency_min, asset_allocations: List[AssetAllocation]):
         self.expendature = expendature
         self.emergency = emergency
         self.fixed = fixed
@@ -260,7 +260,7 @@ def optimize_r_var(retirementSettings: RetirementSettings, r_var_to_opt: RValue,
         retirementSettings.update_val(r_var_to_opt, lambda _: high)
 
     diff = high
-    while diff > 100: # TODO: Make relative to mid
+    while diff > 100:  # TODO: Make relative to mid
         # r_val_print(retirementSettings)
         # input()
         mid = low + (diff / 2)
@@ -285,7 +285,8 @@ def r_val_print(retirementSettings: RetirementSettings):
         print(f"\tReturn stdev: ${alloc.asset.return_stdev*100:.2f}%")
         print(f"\tPriority: {alloc.priority}")
         print(f"\tMinimum value: {alloc.minimum_value}")
-        print(f"\tPreferred fraction of priority class: {alloc.preferred_fraction_of_priority_class*100:.2f}%")
+        print(
+            f"\tPreferred fraction of priority class: {alloc.preferred_fraction_of_priority_class*100:.2f}%")
         print()
     print(f"Emergency: ${retirementSettings.emergency:,.2f}")
     print(f"Fixed Income: ${retirementSettings.fixed:,.2f}")
@@ -311,8 +312,8 @@ def choose_priority(asset_allocations: List[AssetAllocation]) -> int:
                 (f"Prioritize below {alloc.asset.name}", alloc.priority + 1))
         else:
             options.append(
-                (f"Prioritize between {alloc.asset.name} and {asset_allocations[i+1].asset.name}", 
-                alloc.priority + 1))
+                (f"Prioritize between {alloc.asset.name} and {asset_allocations[i+1].asset.name}",
+                 alloc.priority + 1))
 
     priority = choose(options)
     if priority is not None:
@@ -385,15 +386,18 @@ def savings_required_for_expenditure_prompt():
     print()
     print("Binary searching possible retirement scenarios 10,000 times each...")
     maxexp = optimize_r_var(
-        RetirementSettings(expenditure, 0, 0, 0, inflation, eret, t, 0, []),
-        RValue(RSetting.EQUITY), False, wcp)
+        RetirementSettings(expenditure, 0, 0, 0, inflation, (0, 0), t, 0,
+                           [AssetAllocation(Asset("Equities", 0, eret[0], eret[1]), 0, 0, 0)]),
+        RValue(RSetting.ASSET_ALLOCATIONS,
+               (0, AllocationValue(AllocationSetting.ASSET, AssetSetting.VALUE))),
+        False, wcp)
     print(f"Minimum safe equity savings for retirement: ${maxexp:,.2f}")
 
 
 if __name__ == '__main__':
-    # rs = retirement_value(RetirementSettings(100, 0, 0, 0, (0.04, .02), (0, 0), 65, 0, 
-    #     [AssetAllocation(Asset("eme", 1000, 0, 0), 0, 0, 0), 
-    #     AssetAllocation(Asset("f", 30000, .04, .02), 2, 0, 0), 
+    # rs = retirement_value(RetirementSettings(100, 0, 0, 0, (0.04, .02), (0, 0), 65, 0,
+    #     [AssetAllocation(Asset("eme", 1000, 0, 0), 0, 0, 0),
+    #     AssetAllocation(Asset("f", 30000, .04, .02), 2, 0, 0),
     #     AssetAllocation(Asset("eq", 615000, .1, .03), 3, 0, 0)]))
     # print(rs.current_value())
 
