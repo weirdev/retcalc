@@ -1,6 +1,6 @@
 import random
 from enum import Enum
-from typing import Any, Callable, List, Optional, Tuple
+from typing import Any, Callable, List, Literal, Optional, Tuple
 
 from prompt import choose, takefloat, takeint
 
@@ -13,11 +13,11 @@ class AssetSetting(Enum):
 
 
 class Asset:
-    def __init__(self, name, value, mean_return, return_stdev):
-        self.name = name
-        self.value = value
-        self.mean_return = mean_return
-        self.return_stdev = return_stdev
+    def __init__(self, name: str, value: float, mean_return: float, return_stdev: float):
+        self.name: str = name
+        self.value: float = value
+        self.mean_return: float = mean_return
+        self.return_stdev: float = return_stdev
 
     def copy(self) -> 'Asset':
         return Asset(self.name, self.value, self.mean_return, self.return_stdev)
@@ -32,6 +32,22 @@ class Asset:
         elif asset_setting == AssetSetting.RETURN_STDEV:
             self.return_stdev = op(self.return_stdev)
 
+    @staticmethod
+    def from_structured(assetObj: dict) -> 'Asset':
+        name = assetObj["name"]
+        value = assetObj["value"]
+        mean_return = assetObj["mean_return"]
+        return_stdev = assetObj["return_stdev"]
+        return Asset(name, value, mean_return, return_stdev)
+
+    def to_structured(self) -> dict:
+        assetObj = {}
+        assetObj["name"] = self.name
+        assetObj["value"] = self.value
+        assetObj["mean_return"] = self.mean_return
+        assetObj["return_stdev"] = self.return_stdev
+        return assetObj
+
 
 class AllocationSetting(Enum):
     ASSET = 1
@@ -41,13 +57,14 @@ class AllocationSetting(Enum):
 
 
 class AllocationValue:
-    def __init__(self, allocation_setting, asset_setting=None):
+    def __init__(self, allocation_setting, asset_setting=Optional[AssetSetting]):
         self.allocation_setting = allocation_setting
-        self.asset_setting = asset_setting
+        self.asset_setting: Optional[AssetSetting] = asset_setting # type: ignore
 
 
 class AssetAllocation:
-    def __init__(self, asset: Asset, priority, minimum_value, preferred_fraction_of_priority_class):
+    def __init__(self, asset: Asset, priority: int, minimum_value: float, 
+                preferred_fraction_of_priority_class: float):
         self.asset = asset
         self.priority = priority
         self.minimum_value = minimum_value
@@ -72,6 +89,22 @@ class AssetAllocation:
             self.preferred_fraction_of_priority_class = op(
                 self.preferred_fraction_of_priority_class)
 
+    @staticmethod
+    def from_structured(alloc_obj: dict) -> 'AssetAllocation':
+        asset = Asset.from_structured(alloc_obj["asset"])
+        priority = alloc_obj["priority"]
+        minimum_value = alloc_obj["minimum_value"]
+        preferred_fraction_of_priority_class = alloc_obj["preferred_fraction_of_priority_class"]
+        return AssetAllocation(asset, priority, minimum_value, preferred_fraction_of_priority_class)
+
+
+    def to_structured(self) -> dict:
+        alloc_obj = {}
+        alloc_obj["asset"] = self.asset.to_structured()
+        alloc_obj["priority"] = self.priority
+        alloc_obj["minimum_value"] = self.minimum_value
+        alloc_obj["preferred_fraction_of_priority_class"] = self.preferred_fraction_of_priority_class
+        return alloc_obj
 
 class RSetting(Enum):
     EXPENDATURE = 1
@@ -88,8 +121,8 @@ class RValue:
 
 
 class RetirementSettings:
-    def __init__(self, expendature, inflation: Tuple[float, float],
-                 t: int, emergency_min, asset_allocations: List[AssetAllocation]):
+    def __init__(self, expendature: float, inflation: Tuple[float, float],
+                 t: int, emergency_min: float, asset_allocations: List[AssetAllocation]):
         self.expendature = expendature
         self.inflation = inflation
         self.t = t
@@ -134,6 +167,24 @@ class RetirementSettings:
                                   self.emergency_min,
                                   [a.copy() for a in self.asset_allocations])
 
+    @staticmethod
+    def from_structured(ret_obj: dict) -> 'RetirementSettings':
+        expendature = ret_obj["expendature"]
+        inflation = tuple(ret_obj["inflation"])
+        t = ret_obj["t"]
+        emergency_min = ret_obj["emergency_min"]
+        asset_allocations = [AssetAllocation.from_structured(aa) for aa in ret_obj["asset_allocations"]]
+        return RetirementSettings(expendature, inflation, t, emergency_min, asset_allocations)
+
+
+    def to_structured(self) -> dict:
+        ret_obj = {}
+        ret_obj["expendature"] = self.expendature
+        ret_obj["inflation"] = list(self.inflation)
+        ret_obj["t"] = self.t
+        ret_obj["emergency_min"] = self.emergency_min
+        ret_obj["asset_allocations"] = [aa.to_structured() for aa in self.asset_allocations]
+        return ret_obj
 
 def inflated_val(val: float, r: float, t: int):
     return val * ((1 + r)**t)
@@ -329,7 +380,7 @@ def savings_required_for_expenditure_prompt():
         RetirementSettings(expenditure, inflation, t, 0,
                            [AssetAllocation(Asset("Equities", 0, eret[0], eret[1]), 0, 0, 0)]),
         RValue(RSetting.ASSET_ALLOCATIONS,
-               (0, AllocationValue(AllocationSetting.ASSET, AssetSetting.VALUE))),
+               (0, AllocationValue(AllocationSetting.ASSET, AssetSetting.VALUE))), # type: ignore
         False, wcp)
     print(f"Minimum safe equity savings for retirement: ${maxexp:,.2f}")
 
