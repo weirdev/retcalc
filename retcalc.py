@@ -1,9 +1,31 @@
+from os import path, listdir
 import random
 from enum import Enum
-from typing import Any, Callable, List, Literal, Optional, Tuple
+from typing import Any, Callable, List, Optional, Tuple
 
-from prompt import choose, takefloat, takeint
+from prompt import choose, takebool, takefloat, takeint
+from yaml_helper import load_yaml, dump_yaml
 
+
+SAVED_SCENARIOS_DIRNAME = "savedscenarios"
+
+def save_retirement_settings(scenario: 'RetirementSettings'):
+    filename = input("Filename [.yaml]: ").strip()
+    if not filename.endswith(".yaml"):
+        filename += ".yaml"
+    filepath = path.join(SAVED_SCENARIOS_DIRNAME, filename)
+    dump_yaml(scenario.to_structured(), filepath)
+
+def select_and_load_retirement_settings() -> Optional['RetirementSettings']:
+    files = [(filename, filename) for filename in listdir(SAVED_SCENARIOS_DIRNAME)]
+    if len(files) == 0:
+        print("No saved retirement scenarios available")
+        return None
+    elif len(files) == 1:
+        print(f"Using scenario from {files[0][1]}")
+    filename = choose(files)
+    filepath = path.join(SAVED_SCENARIOS_DIRNAME, filename)
+    return RetirementSettings.from_structured(load_yaml(filepath))
 
 class AssetSetting(Enum):
     NAME = 1
@@ -306,45 +328,54 @@ def choose_priority(asset_allocations: List[AssetAllocation]) -> int:
                 (f"Prioritize between {alloc.asset.name} and {asset_allocations[i+1].asset.name}",
                  alloc.priority + 1))
 
-    priority = choose(options)
-    if priority is not None:
-        return priority
+    if len(options) > 0:
+        return choose(options)
     return 0
 
 
 def safe_ret_expenditure_prompt():
-    t = takeint("Whole number of remaining earning years from today", lbound=1)
+    current_state = None
+    if choose([("Load current state from disk", True), 
+                ("Enter current state now", False)]):
+        current_state = select_and_load_retirement_settings()
+    
+    if current_state is None:
+        t = takeint("Whole number of remaining earning years from today", lbound=1)
 
-    allocations = []
-    add_asset = True
-    while add_asset:
+        allocations = []
+        add_asset = True
+        while add_asset:
+            print()
+            print("Adding new asset")
+            name = input("Asset name: ")
+            value = takefloat(f"Amount invested in {name}", lbound=0)
+            mean_return = takefloat(
+                f"Enter estimated mean {name} return over this period", -1, 1)
+            return_stdev = takefloat(
+                f"Enter esticurrent statemated {name} return standard deviation over this period", 0, 1)
+            asset = Asset(name, value, mean_return, return_stdev)
+
+            allocations.append(AssetAllocation(
+                asset, choose_priority(allocations), 0, 0))
+            add_asset = choose(
+                [("Add another asset", True), ("Finished adding assets", False)])
         print()
-        print("Adding new asset")
-        name = input("Asset name: ")
-        value = takefloat(f"Amount invested in {name}", lbound=0)
-        mean_return = takefloat(
-            f"Enter estimated mean {name} return over this period", -1, 1)
-        return_stdev = takefloat(
-            f"Enter estimated {name} return standard deviation over this period", 0, 1)
-        asset = Asset(name, value, mean_return, return_stdev)
+        expenditure = - \
+            takefloat(
+                "Enter expected annual equity contributions over this period (your yearly savings) ($)")
+        inflation = (takefloat("Enter estimated mean inflation over this period", -1, 1),
+                    takefloat("Enter estimated inflation standard deviation over this period", 0, 1))
 
-        allocations.append(AssetAllocation(
-            asset, choose_priority(allocations), 0, 0))
-        add_asset = choose(
-            [("Add another asset", True), ("Finished adding assets", False)])
-    print()
-    expenditure = - \
-        takefloat(
-            "Enter expected annual equity contributions over this period (your yearly savings) ($)")
-    inflation = (takefloat("Enter estimated mean inflation over this period", -1, 1),
-                 takefloat("Enter estimated inflation standard deviation over this period", 0, 1))
+        current_state = RetirementSettings(expenditure, inflation, t, 0, allocations)
+
+        if takebool("Save pre-retirement scenario to disk?"):
+            save_retirement_settings(current_state)
 
     print()
     wcp = takefloat(
         "Enter tail probability for Monte Carlo simulation (<0.5=worse than average result)", 0, 1)
     print("Simulating 10,000 possible scenarios...")
-    runs = simulate(RetirementSettings(expenditure, inflation, t, 0, allocations),
-                    10_000)
+    runs = simulate(current_state, 10_000)
     result_setting = worst_case(runs, wcp)
 
     retwealth = result_setting.current_value()
@@ -361,6 +392,10 @@ def safe_ret_expenditure_prompt():
     maxexp = optimize_r_var(retirement_start, RValue(
         RSetting.EXPENDATURE), True, wcp)
     print(f"Maximum safe yearly expendature in retirement: ${maxexp:,.2f}")
+
+    print()
+    if takebool("Save retirement scenario to disk?"):
+        save_retirement_settings(retirement_start)
 
 
 def savings_required_for_expenditure_prompt():

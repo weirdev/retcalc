@@ -2,10 +2,10 @@ from typing import List, Optional, Tuple, TypeVar
 
 T = TypeVar('T')
 
-def choose(opts: List[Tuple[str, T]]) -> Optional[T]:
-    if len(opts) == 0:
-        return None
-    elif len(opts) == 1:
+def choose(opts: List[Tuple[str, T]]) -> T:
+    assert len(opts) != 0
+
+    if len(opts) == 1:
         return opts[0][1]
 
     for i, o in enumerate(opts):
@@ -22,14 +22,25 @@ def choose(opts: List[Tuple[str, T]]) -> Optional[T]:
 
         s = input("Invalid input, please input a number in the list")
 
-def takeint(prompt, lbound: Optional[float] = None, ubound: Optional[float] = None) -> int:
+def takebool(prompt: str) -> bool:
+    prompt = f"{prompt} [y/n]: "
+    while True:
+        s = input(prompt)
+        try:
+            resp = s.strip().lower()
+            if resp == "y" or resp == "n" or resp == "yes" or resp == "no":
+                return "y" == resp[0]
+        except:
+            pass
+
+def takeint(prompt: str, lbound: Optional[float] = None, ubound: Optional[float] = None) -> int:
     slb = lbound if lbound is not None else "-inf"
     sub = ubound if ubound is not None else "inf"
 
     s = input(f"{prompt} [{slb},{sub}]: ")
     while True:
         try:
-            i = int(s)
+            i = int(s.strip())
             if lbound is None or i >= lbound:
                 if ubound is None or i <= ubound:
                     return i
@@ -38,14 +49,14 @@ def takeint(prompt, lbound: Optional[float] = None, ubound: Optional[float] = No
         except:
             s = input("Not a valid integer\nEnter a valid integer: ")
 
-def takefloat(prompt, lbound: Optional[float] = None, ubound: Optional[float] = None) -> float:
+def takefloat(prompt: str, lbound: Optional[float] = None, ubound: Optional[float] = None) -> float:
     slb = lbound if lbound is not None else "-inf"
     sub = ubound if ubound is not None else "inf"
 
     s = input(f"{prompt} [{slb},{sub}]: ")
     while True:
         try:
-            f = float(s)
+            f = float(s.strip())
             if lbound is None or f >= lbound:
                 if ubound is None or f <= ubound:
                     return f
