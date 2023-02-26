@@ -9,6 +9,7 @@ from yaml_helper import load_yaml, dump_yaml
 
 SAVED_SCENARIOS_DIRNAME = "savedscenarios"
 
+
 def save_retirement_settings(scenario: 'RetirementSettings'):
     filename = input("Filename [.yaml]: ").strip()
     if not filename.endswith(".yaml"):
@@ -16,8 +17,10 @@ def save_retirement_settings(scenario: 'RetirementSettings'):
     filepath = path.join(SAVED_SCENARIOS_DIRNAME, filename)
     dump_yaml(scenario.to_structured(), filepath)
 
+
 def select_and_load_retirement_settings() -> Optional['RetirementSettings']:
-    files = [(filename, filename) for filename in listdir(SAVED_SCENARIOS_DIRNAME)]
+    files = [(filename, filename)
+             for filename in listdir(SAVED_SCENARIOS_DIRNAME)]
     if len(files) == 0:
         print("No saved retirement scenarios available")
         return None
@@ -26,6 +29,7 @@ def select_and_load_retirement_settings() -> Optional['RetirementSettings']:
     filename = choose(files)
     filepath = path.join(SAVED_SCENARIOS_DIRNAME, filename)
     return RetirementSettings.from_structured(load_yaml(filepath))
+
 
 class AssetSetting(Enum):
     NAME = 1
@@ -81,12 +85,12 @@ class AllocationSetting(Enum):
 class AllocationValue:
     def __init__(self, allocation_setting, asset_setting=Optional[AssetSetting]):
         self.allocation_setting = allocation_setting
-        self.asset_setting: Optional[AssetSetting] = asset_setting # type: ignore
+        self.asset_setting = asset_setting
 
 
 class AssetAllocation:
-    def __init__(self, asset: Asset, priority: int, minimum_value: float, 
-                preferred_fraction_of_priority_class: float):
+    def __init__(self, asset: Asset, priority: int, minimum_value: float,
+                 preferred_fraction_of_priority_class: float):
         self.asset = asset
         self.priority = priority
         self.minimum_value = minimum_value
@@ -102,7 +106,7 @@ class AssetAllocation:
             if avalue.asset_setting is None:
                 self.asset = op(self.asset)
             else:
-                self.asset.update_val(avalue.asset_setting, op)
+                self.asset.update_val(avalue.asset_setting, op) # type: ignore
         elif asetting == AllocationSetting.PRIORITY:
             self.priority = op(self.priority)
         elif asetting == AllocationSetting.MINIMUM_VALUE:
@@ -119,7 +123,6 @@ class AssetAllocation:
         preferred_fraction_of_priority_class = alloc_obj["preferred_fraction_of_priority_class"]
         return AssetAllocation(asset, priority, minimum_value, preferred_fraction_of_priority_class)
 
-
     def to_structured(self) -> dict:
         alloc_obj = {}
         alloc_obj["asset"] = self.asset.to_structured()
@@ -127,6 +130,7 @@ class AssetAllocation:
         alloc_obj["minimum_value"] = self.minimum_value
         alloc_obj["preferred_fraction_of_priority_class"] = self.preferred_fraction_of_priority_class
         return alloc_obj
+
 
 class RSetting(Enum):
     EXPENDATURE = 1
@@ -195,9 +199,9 @@ class RetirementSettings:
         inflation = tuple(ret_obj["inflation"])
         t = ret_obj["t"]
         emergency_min = ret_obj["emergency_min"]
-        asset_allocations = [AssetAllocation.from_structured(aa) for aa in ret_obj["asset_allocations"]]
+        asset_allocations = [AssetAllocation.from_structured(
+            aa) for aa in ret_obj["asset_allocations"]]
         return RetirementSettings(expendature, inflation, t, emergency_min, asset_allocations)
-
 
     def to_structured(self) -> dict:
         ret_obj = {}
@@ -205,8 +209,10 @@ class RetirementSettings:
         ret_obj["inflation"] = list(self.inflation)
         ret_obj["t"] = self.t
         ret_obj["emergency_min"] = self.emergency_min
-        ret_obj["asset_allocations"] = [aa.to_structured() for aa in self.asset_allocations]
+        ret_obj["asset_allocations"] = [aa.to_structured()
+                                        for aa in self.asset_allocations]
         return ret_obj
+
 
 def inflated_val(val: float, r: float, t: int):
     return val * ((1 + r)**t)
@@ -335,12 +341,13 @@ def choose_priority(asset_allocations: List[AssetAllocation]) -> int:
 
 def safe_ret_expenditure_prompt():
     current_state = None
-    if choose([("Load current state from disk", True), 
-                ("Enter current state now", False)]):
+    if choose([("Load current state from disk", True),
+               ("Enter current state now", False)]):
         current_state = select_and_load_retirement_settings()
-    
+
     if current_state is None:
-        t = takeint("Whole number of remaining earning years from today", lbound=1)
+        t = takeint(
+            "Whole number of remaining earning years from today", lbound=1)
 
         allocations = []
         add_asset = True
@@ -364,9 +371,10 @@ def safe_ret_expenditure_prompt():
             takefloat(
                 "Enter expected annual equity contributions over this period (your yearly savings) ($)")
         inflation = (takefloat("Enter estimated mean inflation over this period", -1, 1),
-                    takefloat("Enter estimated inflation standard deviation over this period", 0, 1))
+                     takefloat("Enter estimated inflation standard deviation over this period", 0, 1))
 
-        current_state = RetirementSettings(expenditure, inflation, t, 0, allocations)
+        current_state = RetirementSettings(
+            expenditure, inflation, t, 0, allocations)
 
         if takebool("Save pre-retirement scenario to disk?"):
             save_retirement_settings(current_state)
@@ -399,23 +407,36 @@ def safe_ret_expenditure_prompt():
 
 
 def savings_required_for_expenditure_prompt():
-    expenditure = takefloat(
-        "Enter amount to be withdrawn from equities yearly ($)", lbound=0)
-    t = takeint("Enter estimated whole number of years of retirement", lbound=1)
-    inflation = (takefloat("Enter estimated mean inflation over this period", -1, 1),
-                 takefloat("Enter estimated inflation standard deviation over this period", 0, 1))
-    eret = (takefloat("Enter estimated mean equity return over this period", -1, 1),
-            takefloat("Enter estimated equity return standard deviation over this period", 0, 1))
+    retirement_scenario = None
+    if choose([("Load retirement scenario from disk", True),
+               ("Enter retirement scenario now", False)]):
+        retirement_scenario = select_and_load_retirement_settings()
+        if retirement_scenario is not None:
+            r_val_print(retirement_scenario)
+
+    if retirement_scenario is None:
+        expenditure = takefloat(
+            "Enter amount to be withdrawn from equities yearly ($)", lbound=0)
+        t = takeint(
+            "Enter estimated whole number of years of retirement", lbound=1)
+        inflation = (takefloat("Enter estimated mean inflation over this period", -1, 1),
+                     takefloat("Enter estimated inflation standard deviation over this period", 0, 1))
+        eret = (takefloat("Enter estimated mean equity return over this period", -1, 1),
+                takefloat("Enter estimated equity return standard deviation over this period", 0, 1))
+        retirement_scenario = RetirementSettings(expenditure, inflation, t, 0,
+                                                 [AssetAllocation(Asset("Equities", 0, eret[0], eret[1]), 0, 0, 0)])
+
+    print()
     wcp = takefloat(
         "Enter tail probability for Monte Carlo simulation (<0.5=worse than average result)", 0, 1)
 
     print()
     print("Binary searching possible retirement scenarios 10,000 times each...")
     maxexp = optimize_r_var(
-        RetirementSettings(expenditure, inflation, t, 0,
-                           [AssetAllocation(Asset("Equities", 0, eret[0], eret[1]), 0, 0, 0)]),
+        retirement_scenario,
         RValue(RSetting.ASSET_ALLOCATIONS,
-               (0, AllocationValue(AllocationSetting.ASSET, AssetSetting.VALUE))), # type: ignore
+               (len(retirement_scenario.asset_allocations)-1,
+                AllocationValue(AllocationSetting.ASSET, AssetSetting.VALUE))),  # type: ignore
         False, wcp)
     print(f"Minimum safe equity savings for retirement: ${maxexp:,.2f}")
 
