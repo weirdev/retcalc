@@ -42,7 +42,23 @@ def create_assets() -> List[Asset]:
             Asset("Asset1", 0.01, 0.1, 0.001)]
 
 
+def create_asset_allocs() -> List[AssetAllocation]:
+    assets = create_assets()
+    return [AssetAllocation(assets[0], 1, 10.1, 0.1),
+            AssetAllocation(assets[1], 0, 0, 0),
+            AssetAllocation(assets[2], 1, 0.1, 10.1)]
+
+
+def create_ret_settings() -> List[RetirementSettings]:
+    asset_allocs = create_asset_allocs()
+    return [RetirementSettings(10, (0.1, 0.01), 10, 1.1, asset_allocs),
+            RetirementSettings(0, (0.0, 0.0), 0, 0.0, asset_allocs[1:2]),
+            RetirementSettings(10, (0.01, 0.1), 10, 1.1, asset_allocs)]
+
+
 class RetTypesTest(unittest.TestCase):
+    # Asset tests
+
     def test_asset_eq(self):
         test_eq(self, create_assets(), create_assets())
 
@@ -55,6 +71,36 @@ class RetTypesTest(unittest.TestCase):
 
     def test_asset_structured(self):
         test_structured(self, create_assets(), Asset)
+
+    # AssetAllocation tests
+
+    def test_asset_alloc_eq(self):
+        test_eq(self, create_asset_allocs(), create_asset_allocs())
+
+    def test_asset_alloc_hash(self):
+        test_eq(self, create_asset_allocs(), create_asset_allocs(),
+                lambda a: hash(a))
+
+    def test_asset_alloc_copy(self):
+        test_copy(self, create_asset_allocs())
+
+    def test_asset_alloc_structured(self):
+        test_structured(self, create_asset_allocs(), AssetAllocation)
+
+    # RetirementSettings test
+
+    def test_ret_settings_eq(self):
+        test_eq(self, create_ret_settings(), create_ret_settings())
+
+    def test_ret_settings_hash(self):
+        test_eq(self, create_ret_settings(), create_ret_settings(),
+                lambda a: hash(a))
+
+    def test_ret_settings_copy(self):
+        test_copy(self, create_ret_settings())
+
+    def test_ret_settings_structured(self):
+        test_structured(self, create_ret_settings(), RetirementSettings)
 
 
 if __name__ == "__main__":

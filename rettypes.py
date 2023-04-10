@@ -216,11 +216,11 @@ class RetirementSettings:
                 self.inflation == other.inflation and
                 self.t == other.t and
                 self.emergency_min == other.emergency_min and
-                self.asset_allocations == other.asset_allocations)
+                set(self.asset_allocations) == set(other.asset_allocations))
 
     def __hash__(self) -> int:
         return hash((self.expendature,
                      self.inflation,
                      self.t,
                      self.emergency_min,
-                     self.asset_allocations))
+                     frozenset(self.asset_allocations)))
