@@ -1,6 +1,7 @@
 from enum import Enum
 from typing import Any, Callable, List, Optional, Tuple
 
+
 class AssetSetting(Enum):
     NAME = 1
     VALUE = 2
@@ -44,6 +45,19 @@ class Asset:
         assetObj["return_stdev"] = self.return_stdev
         return assetObj
 
+    def __eq__(self, other: object) -> bool:
+        return (isinstance(other, Asset) and
+                self.name == other.name and
+                self.value == other.value and
+                self.mean_return == other.mean_return and
+                self.return_stdev == other.return_stdev)
+
+    def __hash__(self) -> int:
+        return hash((self.name,
+                     self.value,
+                     self.mean_return,
+                     self.return_stdev))
+
 
 class AllocationSetting(Enum):
     ASSET = 1
@@ -76,7 +90,7 @@ class AssetAllocation:
             if avalue.asset_setting is None:
                 self.asset = op(self.asset)
             else:
-                self.asset.update_val(avalue.asset_setting, op) # type: ignore
+                self.asset.update_val(avalue.asset_setting, op)  # type: ignore
         elif asetting == AllocationSetting.PRIORITY:
             self.priority = op(self.priority)
         elif asetting == AllocationSetting.MINIMUM_VALUE:
@@ -100,6 +114,19 @@ class AssetAllocation:
         alloc_obj["minimum_value"] = self.minimum_value
         alloc_obj["preferred_fraction_of_priority_class"] = self.preferred_fraction_of_priority_class
         return alloc_obj
+
+    def __eq__(self, other: object) -> bool:
+        return (isinstance(other, AssetAllocation) and
+                self.asset == other.asset and
+                self.priority == other.priority and
+                self.minimum_value == other.minimum_value and
+                self.preferred_fraction_of_priority_class == other.preferred_fraction_of_priority_class)
+
+    def __hash__(self) -> int:
+        return hash((self.asset,
+                     self.priority,
+                     self.minimum_value,
+                     self.preferred_fraction_of_priority_class))
 
 
 class RSetting(Enum):
@@ -182,3 +209,18 @@ class RetirementSettings:
         ret_obj["asset_allocations"] = [aa.to_structured()
                                         for aa in self.asset_allocations]
         return ret_obj
+
+    def __eq__(self, other: object) -> bool:
+        return (isinstance(other, RetirementSettings) and
+                self.expendature == other.expendature and
+                self.inflation == other.inflation and
+                self.t == other.t and
+                self.emergency_min == other.emergency_min and
+                self.asset_allocations == other.asset_allocations)
+
+    def __hash__(self) -> int:
+        return hash((self.expendature,
+                     self.inflation,
+                     self.t,
+                     self.emergency_min,
+                     self.asset_allocations))

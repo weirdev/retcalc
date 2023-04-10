@@ -2,6 +2,7 @@ from typing import List, Optional, Tuple, TypeVar
 
 T = TypeVar('T')
 
+
 def choose(opts: List[Tuple[str, T]]) -> T:
     assert len(opts) != 0
 
@@ -22,6 +23,7 @@ def choose(opts: List[Tuple[str, T]]) -> T:
 
         s = input("Invalid input, please input a number in the list")
 
+
 def takebool(prompt: str) -> bool:
     prompt = f"{prompt} [y/n]: "
     while True:
@@ -32,6 +34,7 @@ def takebool(prompt: str) -> bool:
                 return "y" == resp[0]
         except:
             pass
+
 
 def takeint(prompt: str, lbound: Optional[float] = None, ubound: Optional[float] = None) -> int:
     slb = lbound if lbound is not None else "-inf"
@@ -45,9 +48,11 @@ def takeint(prompt: str, lbound: Optional[float] = None, ubound: Optional[float]
                 if ubound is None or i <= ubound:
                     return i
 
-            s = input(f"Not within bounds [{slb},{sub}]\nEnter a valid integer: ")
+            s = input(
+                f"Not within bounds [{slb},{sub}]\nEnter a valid integer: ")
         except:
             s = input("Not a valid integer\nEnter a valid integer: ")
+
 
 def takefloat(prompt: str, lbound: Optional[float] = None, ubound: Optional[float] = None) -> float:
     slb = lbound if lbound is not None else "-inf"
@@ -60,7 +65,8 @@ def takefloat(prompt: str, lbound: Optional[float] = None, ubound: Optional[floa
             if lbound is None or f >= lbound:
                 if ubound is None or f <= ubound:
                     return f
-            
-            s = input(f"Not within bounds [{slb},{sub}]\nEnter a valid float: ")
+
+            s = input(
+                f"Not within bounds [{slb},{sub}]\nEnter a valid float: ")
         except:
             s = input("Not a valid float\nEnter a valid float: ")
