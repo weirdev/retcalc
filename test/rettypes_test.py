@@ -36,22 +36,36 @@ def test_structured(case: unittest.TestCase, origlist: List[T], type: Type[T]) -
     test_eq(case, origlist, destructuredlist)
 
 
+def create_asset1() -> Asset:
+    return Asset("Asset1", 0.1, 0.01, 0.001)
+
+
 def create_assets() -> List[Asset]:
-    return [Asset("Asset1", 0.1, 0.01, 0.001),
+    return [create_asset1(),
             Asset("Asset2", 0.0, 10000, 0.0),
             Asset("Asset1", 0.01, 0.1, 0.001)]
 
 
+def create_asset_alloc1(asset: Asset = create_asset1()) -> AssetAllocation:
+    return AssetAllocation(asset, 1, 10.1, 0.1)
+
+
 def create_asset_allocs() -> List[AssetAllocation]:
     assets = create_assets()
-    return [AssetAllocation(assets[0], 1, 10.1, 0.1),
+    return [create_asset_alloc1(assets[0]),
             AssetAllocation(assets[1], 0, 0, 0),
             AssetAllocation(assets[2], 1, 0.1, 10.1)]
 
 
+def create_ret_settings1(
+        asset_allocs: List[AssetAllocation] = create_asset_allocs()
+) -> RetirementSettings:
+    return RetirementSettings(10, (0.1, 0.01), 10, 1.1, asset_allocs)
+
+
 def create_ret_settings() -> List[RetirementSettings]:
     asset_allocs = create_asset_allocs()
-    return [RetirementSettings(10, (0.1, 0.01), 10, 1.1, asset_allocs),
+    return [create_ret_settings1(asset_allocs),
             RetirementSettings(0, (0.0, 0.0), 0, 0.0, asset_allocs[1:2]),
             RetirementSettings(10, (0.01, 0.1), 10, 1.1, asset_allocs)]
 
@@ -72,6 +86,14 @@ class RetTypesTest(unittest.TestCase):
     def test_asset_structured(self):
         test_structured(self, create_assets(), Asset)
 
+    def test_asset_update_values(self):
+        asset = create_asset1()
+
+        asset.update_val(AssetSetting.NAME, lambda _: "New name")
+        self.assertEqual(asset.name, "New name")
+
+        # TODO: Remaining member values
+
     # AssetAllocation tests
 
     def test_asset_alloc_eq(self):
@@ -87,6 +109,22 @@ class RetTypesTest(unittest.TestCase):
     def test_asset_alloc_structured(self):
         test_structured(self, create_asset_allocs(), AssetAllocation)
 
+    def test_asset_alloc_update_values(self):
+        asset_alloc = create_asset_alloc1()
+
+        orig_asset_value = asset_alloc.asset.value
+        asset_alloc.update_val(
+            AllocationValue(AllocationSetting.ASSET,
+                            AssetSetting.VALUE),  # type: ignore
+            lambda value: value + 1)
+        self.assertEqual(asset_alloc.asset.value, orig_asset_value + 1)
+
+        asset_alloc.update_val(AllocationValue(
+            AllocationSetting.PRIORITY), lambda _: 5)
+        self.assertEqual(asset_alloc.priority, 5)
+
+        # TODO: Remaining member values
+
     # RetirementSettings test
 
     def test_ret_settings_eq(self):
@@ -101,6 +139,23 @@ class RetTypesTest(unittest.TestCase):
 
     def test_ret_settings_structured(self):
         test_structured(self, create_ret_settings(), RetirementSettings)
+
+    def test_ret_settings_update_values(self):
+        ret_settings = create_ret_settings1()
+
+        ret_settings.update_val(RValue(RSetting.EXPENDATURE), lambda _: 99)
+        self.assertEqual(ret_settings.expendature, 99)
+
+        orig_alloc1_asset_value = ret_settings.asset_allocations[1].asset.value
+        ret_settings.update_val(
+            RValue(RSetting.ASSET_ALLOCATIONS,
+                   (1, AllocationValue(AllocationSetting.ASSET,
+                                       AssetSetting.VALUE))),  # type: ignore
+            lambda value: value + 1)
+        self.assertEqual(ret_settings.asset_allocations[1].asset.value,
+                         orig_alloc1_asset_value + 1)
+
+        # TODO: Remaining member values
 
 
 if __name__ == "__main__":
