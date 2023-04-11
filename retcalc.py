@@ -134,22 +134,45 @@ def r_val_print(retirementSettings: RetirementSettings):
     print(f"Years left: {retirementSettings.t}")
 
 
-def choose_priority(asset_allocations: List[AssetAllocation]) -> int:
-    options: List[Tuple[str, int]] = []
+def insert_alloc_set_priority(asset_alloc: AssetAllocation, priority: float,
+                              asset_allocations: List[AssetAllocation]):
+    idx = 0
+    intpri = 0
+    bump_pri = False
+    for i, aa in enumerate(asset_allocations):
+        if bump_pri:
+            aa.priority += 1
+        elif priority < aa.priority:
+            idx = i
+            if priority % 1 == 0:
+                intpri = int(priority)
+                break
+            else:
+                intpri = aa.priority
+                aa.priority += 1
+                bump_pri = True
+        elif priority == aa.priority:
+            idx = i + 1
+
+    asset_alloc.priority = intpri
+    asset_allocations.insert(idx, asset_alloc)
+
+
+def choose_priority(asset_allocations: List[AssetAllocation]) -> float:
+    options: List[Tuple[str, float]] = []
     for i, alloc in enumerate(asset_allocations):
-        alloc.priority *= 2  # Space out so we can put new priority in between
         if i == 0:
             options.append(
-                (f"Prioritize over {alloc.asset.name}", alloc.priority - 1))
+                (f"Prioritize over {alloc.asset.name}", alloc.priority - 0.5))
         options.append(
             (f"Prioritize equally with {alloc.asset.name}", alloc.priority))
         if i == len(asset_allocations) - 1:
             options.append(
-                (f"Prioritize below {alloc.asset.name}", alloc.priority + 1))
+                (f"Prioritize below {alloc.asset.name}", alloc.priority + 0.5))
         else:
             options.append(
                 (f"Prioritize between {alloc.asset.name} and {asset_allocations[i+1].asset.name}",
-                 alloc.priority + 1))
+                 alloc.priority + 0.5))
 
     if len(options) > 0:
         return choose(options)
@@ -176,11 +199,13 @@ def safe_ret_expenditure_prompt():
             mean_return = takefloat(
                 f"Enter estimated mean {name} return over this period", -1, 1)
             return_stdev = takefloat(
-                f"Enter esticurrent statemated {name} return standard deviation over this period", 0, 1)
+                f"Enter estimated current statemated {name} return standard deviation over this period", 0, 1)
             asset = Asset(name, value, mean_return, return_stdev)
 
-            allocations.append(AssetAllocation(
-                asset, choose_priority(allocations), 0, 0))
+            insert_alloc_set_priority(
+                AssetAllocation(asset, 0, 0, 0),
+                choose_priority(allocations),
+                allocations)
             add_asset = choose(
                 [("Add another asset", True), ("Finished adding assets", False)])
         print()
@@ -241,7 +266,8 @@ def savings_required_for_expenditure_prompt():
         eret = (takefloat("Enter estimated mean equity return over this period", -1, 1),
                 takefloat("Enter estimated equity return standard deviation over this period", 0, 1))
         retirement_scenario = RetirementSettings(expenditure, inflation, t, 0,
-                                                 [AssetAllocation(Asset("Equities", 0, eret[0], eret[1]), 0, 0, 0)])
+                                                 [AssetAllocation(Asset("Equities", 0, eret[0], eret[1]),
+                                                                  0, 0, 0)])
 
     print()
     wcp = takefloat(
