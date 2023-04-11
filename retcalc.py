@@ -1,6 +1,6 @@
 from os import path, listdir
 import random
-from typing import List, Optional, Tuple
+from typing import List, Optional, MutableSet, Tuple
 
 from prompt import choose, takebool, takefloat, takeint
 from rettypes import *
@@ -44,22 +44,30 @@ def inflated_payments(payment: float, r: float, t: int) -> float:
 
 def retirement_value(retirementSettings: RetirementSettings) -> RetirementSettings:
     inflation_s = random.gauss(*retirementSettings.inflation)
+    inflation_factor = 1 + inflation_s
 
     new_rs = retirementSettings.copy()
 
     to_spend = retirementSettings.expendature
+    hit_zero = False
     for ri, asset_alloc in enumerate(reversed(new_rs.asset_allocations)):
         if ri == len(new_rs.asset_allocations) - 1:
-            # If on last asset, we can go negative
+            if asset_alloc.asset.value < to_spend:
+                hit_zero = True
             spent = to_spend
         else:
             spent = min(asset_alloc.asset.value, to_spend)
         asset_alloc.asset.value -= spent
         to_spend -= spent
-        asset_alloc.asset.value *= (1 + random.gauss(asset_alloc.asset.mean_return,
-                                                     asset_alloc.asset.return_stdev))
+        asset_alloc.minimum_value *= inflation_factor
 
-    new_rs.expendature *= (1 + inflation_s)
+    if not hit_zero:
+        for asset_alloc in new_rs.asset_allocations:
+            asset_alloc.asset.value *= (1 + random.gauss(asset_alloc.asset.mean_return,
+                                                     asset_alloc.asset.return_stdev))
+        rebalance_assets(new_rs.asset_allocations)
+
+    new_rs.expendature *= inflation_factor
 
     if retirementSettings.t > 0:
         new_rs.t -= 1
@@ -116,10 +124,66 @@ def optimize_r_var(retirementSettings: RetirementSettings, r_var_to_opt: RValue,
     return high
 
 
-def r_val_print(retirementSettings: RetirementSettings):
+def rebalance_assets(asset_allocations: List[AssetAllocation]) -> None:
+    total_assets = sum([a.asset.value for a in asset_allocations])
+    if total_assets == 0:
+        return
+    assert total_assets > 0
+    remaining_assets = total_assets
+
+    priority_class: MutableSet[AssetAllocation] = set()
+    priority = None
+    requested_pc_total = 0.0
+    for i, asset_alloc in enumerate(asset_allocations):
+        if priority is None:
+            priority = asset_alloc.priority
+        priority_class.add(asset_alloc)
+        requested_pc_total += asset_alloc.minimum_value
+
+        if (i + 1 < len(asset_allocations) and 
+                priority < asset_allocations[i + 1].priority and
+                requested_pc_total > 0):
+            # If not enough remaining funds, distribute proportionally
+            # factor: (0, 1]
+            factor = min(remaining_assets / requested_pc_total, 1.0)
+            for aa in priority_class:
+                aa.asset.value = aa.minimum_value * factor
+                remaining_assets -= aa.asset.value
+            priority_class = set()
+            priority = None
+            requested_pc_total = 0.0
+        elif i + 1 == len(asset_allocations):
+            # At end of allocs so may have money beyond min requested
+            # Distribute proportionally
+            # factor: (0,inf)
+            if requested_pc_total == 0:
+                equalprop = remaining_assets / len(priority_class)
+                for aa in priority_class:
+                    aa.asset.value = equalprop
+                    remaining_assets -= aa.asset.value
+            else:
+                factor = remaining_assets / requested_pc_total
+                for aa in priority_class:
+                    aa.asset.value = aa.minimum_value * factor
+                    remaining_assets -= aa.asset.value
+
+    # We distributed all the $$
+    assert abs(remaining_assets) < 0.01
+    # Total assets remains constant
+    assert abs(total_assets - sum([a.asset.value for a in asset_allocations])) < 0.01
+
+
+def rsettings_print(retirementSettings: RetirementSettings):
     print(f"Expendature: ${retirementSettings.expendature:,.2f}")
     print("Asset allocations:")
-    for alloc in retirementSettings.asset_allocations:
+    asset_allocs_print(retirementSettings.asset_allocations)
+    print(f"Inflation mean: {retirementSettings.inflation[0]*100:.2f}%")
+    print(f"Inflation stdev: {retirementSettings.inflation[1]*100:.2f}%")
+    print(f"Years left: {retirementSettings.t}")
+
+
+def asset_allocs_print(asset_allocations: List[AssetAllocation]):
+    for alloc in asset_allocations:
         print(f"\tAsset: {alloc.asset.name}")
         print(f"\tValuation: ${alloc.asset.value:,.2f}")
         print(f"\tMean return: ${alloc.asset.mean_return*100:.2f}%")
@@ -129,9 +193,6 @@ def r_val_print(retirementSettings: RetirementSettings):
         print(
             f"\tPreferred fraction of priority class: {alloc.preferred_fraction_of_priority_class*100:.2f}%")
         print()
-    print(f"Inflation mean: {retirementSettings.inflation[0]*100:.2f}%")
-    print(f"Inflation stdev: {retirementSettings.inflation[1]*100:.2f}%")
-    print(f"Years left: {retirementSettings.t}")
 
 
 def insert_alloc_set_priority(asset_alloc: AssetAllocation, priority: float,
@@ -254,7 +315,7 @@ def savings_required_for_expenditure_prompt():
                ("Enter retirement scenario now", False)]):
         retirement_scenario = select_and_load_retirement_settings()
         if retirement_scenario is not None:
-            r_val_print(retirement_scenario)
+            rsettings_print(retirement_scenario)
 
     if retirement_scenario is None:
         expenditure = takefloat(
