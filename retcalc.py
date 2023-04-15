@@ -75,10 +75,7 @@ def retirement_value(retirementSettings: RetirementSettings) -> RetirementSettin
 
 
 def simulate(retirementSettings: RetirementSettings, n: int) -> List[RetirementSettings]:
-    results = []
-    for _ in range(n):
-        results.append(retirement_value(retirementSettings.copy()))
-    return results
+    return [retirement_value(retirementSettings.copy()) for _ in range(n)]
 
 
 def worst_case(runs: List[RetirementSettings], pmin: float):
