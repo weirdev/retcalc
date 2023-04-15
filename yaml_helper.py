@@ -6,12 +6,12 @@ except ImportError:
     from yaml import SafeLoader as Loader, Dumper
 
 
-def load_yaml(filepath):
+def load_yaml(filepath: str) -> dict:
     with open(filepath) as stream:
         return load(stream, Loader=Loader)
 
 
-def dump_yaml(data, filepath):
+def dump_yaml(data: dict, filepath: str):
     makedirs(path.dirname(filepath), exist_ok=True)
     with open(filepath, 'w') as stream:
         dump(data, stream, Dumper=Dumper, default_flow_style=False)
