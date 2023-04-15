@@ -10,15 +10,16 @@ from yaml_helper import load_yaml, dump_yaml
 SAVED_SCENARIOS_DIRNAME = "savedscenarios"
 
 
-def save_retirement_settings(scenario: 'RetirementSettings'):
-    filename = input("Filename [.yaml]: ").strip()
-    if not filename.endswith(".yaml"):
-        filename += ".yaml"
-    filepath = path.join(SAVED_SCENARIOS_DIRNAME, filename)
+def save_retirement_settings(scenario: 'RetirementSettings', filepath: Optional[str] = None):
+    if filepath is None:
+        filename = input("Filename [.yaml]: ").strip()
+        if not filename.endswith(".yaml"):
+            filename += ".yaml"
+        filepath = path.join(SAVED_SCENARIOS_DIRNAME, filename)
     dump_yaml(scenario.to_structured(), filepath)
 
 
-def select_and_load_retirement_settings() -> Optional['RetirementSettings']:
+def select_retirement_settings_file() -> Optional[str]:
     files = [(filename, filename)
              for filename in listdir(SAVED_SCENARIOS_DIRNAME)]
     if len(files) == 0:
@@ -28,7 +29,17 @@ def select_and_load_retirement_settings() -> Optional['RetirementSettings']:
         print(f"Using scenario from {files[0][1]}")
     filename = choose(files)
     filepath = path.join(SAVED_SCENARIOS_DIRNAME, filename)
+    return filepath
+
+def load_retirement_settings(filepath: str) -> Optional['RetirementSettings']:
     return RetirementSettings.from_structured(load_yaml(filepath))
+
+
+def select_and_load_retirement_settings() -> Optional['RetirementSettings']:
+    filepath = select_retirement_settings_file()
+    if filepath is None:
+        return None
+    return load_retirement_settings(filepath)
 
 
 def inflated_val(val: float, r: float, t: int):
@@ -51,8 +62,8 @@ def retirement_value(retirementSettings: RetirementSettings) -> RetirementSettin
     while new_rs.t > 0:
         to_spend = new_rs.expendature
         hit_zero = False
-        for ri, asset_alloc in enumerate(reversed(new_rs.asset_allocations)):
-            if ri == len(new_rs.asset_allocations) - 1:
+        for ri, asset_alloc in enumerate(reversed(new_rs.asset_distribution.asset_allocations)):
+            if ri == len(new_rs.asset_distribution.asset_allocations) - 1:
                 if asset_alloc.asset.value < to_spend:
                     hit_zero = True
                 spent = to_spend
@@ -63,10 +74,10 @@ def retirement_value(retirementSettings: RetirementSettings) -> RetirementSettin
             asset_alloc.minimum_value *= inflation_factor
 
         if not hit_zero:
-            for asset_alloc in new_rs.asset_allocations:
+            for asset_alloc in new_rs.asset_distribution.asset_allocations:
                 asset_alloc.asset.value *= (1 + random.gauss(asset_alloc.asset.mean_return,
                                                              asset_alloc.asset.return_stdev))
-            rebalance_assets(new_rs.asset_allocations)
+            rebalance_assets(new_rs.asset_distribution.asset_allocations)
 
         new_rs.expendature *= inflation_factor
         new_rs.t -= 1
@@ -172,11 +183,15 @@ def rebalance_assets(asset_allocations: List[AssetAllocation]) -> None:
 
 def rsettings_print(retirementSettings: RetirementSettings):
     print(f"Expendature: ${retirementSettings.expendature:,.2f}")
-    print("Asset allocations:")
-    asset_allocs_print(retirementSettings.asset_allocations)
+    print("Asset distribution:")
+    asset_dist_print(retirementSettings.asset_distribution)
     print(f"Inflation mean: {retirementSettings.inflation[0]*100:.2f}%")
     print(f"Inflation stdev: {retirementSettings.inflation[1]*100:.2f}%")
     print(f"Years left: {retirementSettings.t}")
+
+
+def asset_dist_print(asset_distribution: AssetDistribution):
+    asset_allocs_print(asset_distribution.asset_allocations)
 
 
 def asset_allocs_print(asset_allocations: List[AssetAllocation]):
@@ -274,7 +289,7 @@ def safe_ret_expenditure_prompt():
                      takefloat("Enter estimated inflation standard deviation over this period", 0, 1))
 
         current_state = RetirementSettings(
-            expenditure, inflation, t, 0, allocations)
+            expenditure, inflation, t, 0, AssetDistribution(allocations))
 
         if takebool("Save pre-retirement scenario to disk?"):
             save_retirement_settings(current_state)
@@ -323,9 +338,10 @@ def savings_required_for_expenditure_prompt():
                      takefloat("Enter estimated inflation standard deviation over this period", 0, 1))
         eret = (takefloat("Enter estimated mean equity return over this period", -1, 1),
                 takefloat("Enter estimated equity return standard deviation over this period", 0, 1))
-        retirement_scenario = RetirementSettings(expenditure, inflation, t, 0,
-                                                 [AssetAllocation(Asset("Equities", 0, eret[0], eret[1]),
-                                                                  0, 0, 0)])
+        retirement_scenario = RetirementSettings(
+            expenditure, inflation, t, 0, 
+            AssetDistribution([AssetAllocation(Asset("Equities", 0, eret[0], eret[1]),
+                                               0, 0, 0)]))
 
     print()
     wcp = takefloat(
@@ -335,11 +351,22 @@ def savings_required_for_expenditure_prompt():
     print("Binary searching possible retirement scenarios 10,000 times each...")
     maxexp = optimize_r_var(
         retirement_scenario,
-        RValue(RSetting.ASSET_ALLOCATIONS,
-               (len(retirement_scenario.asset_allocations)-1,
-                AllocationValue(AllocationSetting.ASSET, AssetSetting.VALUE))),  # type: ignore
+        RValue(RSetting.ASSET_DISTRIBUTION,
+               DistributionValue(DistributionSetting.ASSET_ALLOCATIONS, 
+                                 (len(retirement_scenario.asset_distribution.asset_allocations)-1,
+                                  AllocationValue(AllocationSetting.ASSET, AssetSetting.VALUE)))),  # type: ignore
         False, wcp)
     print(f"Minimum safe equity savings for retirement: ${maxexp:,.2f}")
+
+
+def rewrite_retirement_scenario_prompt():
+    scenario_file = select_retirement_settings_file()
+    if scenario_file is not None:
+        retirement_scenario = load_retirement_settings(scenario_file)
+        if retirement_scenario is not None:
+            rsettings_print(retirement_scenario)
+            if takebool("Overwrite this scenario?"):
+                save_retirement_settings(retirement_scenario, scenario_file)
 
 
 if __name__ == '__main__':
@@ -350,7 +377,8 @@ if __name__ == '__main__':
     # print(rs.current_value())
 
     prompt_fns = [("Calculate max expenditure in retirement", safe_ret_expenditure_prompt),
-                  ("Calculate savings needed for retirement", savings_required_for_expenditure_prompt)]
+                  ("Calculate savings needed for retirement", savings_required_for_expenditure_prompt),
+                  ("Rewrite retirement scenario", rewrite_retirement_scenario_prompt)]
     prompt_fn = choose(prompt_fns)
     if prompt_fn:
         prompt_fn()
