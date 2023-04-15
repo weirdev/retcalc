@@ -48,30 +48,29 @@ def retirement_value(retirementSettings: RetirementSettings) -> RetirementSettin
 
     new_rs = retirementSettings.copy()
 
-    to_spend = retirementSettings.expendature
-    hit_zero = False
-    for ri, asset_alloc in enumerate(reversed(new_rs.asset_allocations)):
-        if ri == len(new_rs.asset_allocations) - 1:
-            if asset_alloc.asset.value < to_spend:
-                hit_zero = True
-            spent = to_spend
-        else:
-            spent = min(asset_alloc.asset.value, to_spend)
-        asset_alloc.asset.value -= spent
-        to_spend -= spent
-        asset_alloc.minimum_value *= inflation_factor
+    while new_rs.t > 0:
+        to_spend = new_rs.expendature
+        hit_zero = False
+        for ri, asset_alloc in enumerate(reversed(new_rs.asset_allocations)):
+            if ri == len(new_rs.asset_allocations) - 1:
+                if asset_alloc.asset.value < to_spend:
+                    hit_zero = True
+                spent = to_spend
+            else:
+                spent = min(asset_alloc.asset.value, to_spend)
+            asset_alloc.asset.value -= spent
+            to_spend -= spent
+            asset_alloc.minimum_value *= inflation_factor
 
-    if not hit_zero:
-        for asset_alloc in new_rs.asset_allocations:
-            asset_alloc.asset.value *= (1 + random.gauss(asset_alloc.asset.mean_return,
-                                                     asset_alloc.asset.return_stdev))
-        rebalance_assets(new_rs.asset_allocations)
+        if not hit_zero:
+            for asset_alloc in new_rs.asset_allocations:
+                asset_alloc.asset.value *= (1 + random.gauss(asset_alloc.asset.mean_return,
+                                                             asset_alloc.asset.return_stdev))
+            rebalance_assets(new_rs.asset_allocations)
 
-    new_rs.expendature *= inflation_factor
-
-    if retirementSettings.t > 0:
+        new_rs.expendature *= inflation_factor
         new_rs.t -= 1
-        return retirement_value(new_rs)
+
     return new_rs
 
 
@@ -140,7 +139,7 @@ def rebalance_assets(asset_allocations: List[AssetAllocation]) -> None:
         priority_class.add(asset_alloc)
         requested_pc_total += asset_alloc.minimum_value
 
-        if (i + 1 < len(asset_allocations) and 
+        if (i + 1 < len(asset_allocations) and
                 priority < asset_allocations[i + 1].priority and
                 requested_pc_total > 0):
             # If not enough remaining funds, distribute proportionally
@@ -170,7 +169,8 @@ def rebalance_assets(asset_allocations: List[AssetAllocation]) -> None:
     # We distributed all the $$
     assert abs(remaining_assets) < 0.01
     # Total assets remains constant
-    assert abs(total_assets - sum([a.asset.value for a in asset_allocations])) < 0.01
+    assert abs(total_assets -
+               sum([a.asset.value for a in asset_allocations])) < 0.01
 
 
 def rsettings_print(retirementSettings: RetirementSettings):
