@@ -33,7 +33,7 @@ def takebool(prompt: str) -> bool:
             return "y" == resp[0]
 
 
-def takeint(prompt: str, lbound: Optional[float] = None, 
+def takeint(prompt: str, lbound: Optional[float] = None,
             ubound: Optional[float] = None) -> int:
     slb = lbound if lbound is not None else "-inf"
     sub = ubound if ubound is not None else "inf"
@@ -52,7 +52,7 @@ def takeint(prompt: str, lbound: Optional[float] = None,
             s = input("Not a valid integer\nEnter a valid integer: ")
 
 
-def takefloat(prompt: str, lbound: Optional[float] = None, 
+def takefloat(prompt: str, lbound: Optional[float] = None,
               ubound: Optional[float] = None) -> float:
     slb = lbound if lbound is not None else "-inf"
     sub = ubound if ubound is not None else "inf"

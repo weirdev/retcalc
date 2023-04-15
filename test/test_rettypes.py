@@ -30,7 +30,8 @@ def test_copy(case: unittest.TestCase, origlist: List[Any]) -> None:
     test_eq(case, origlist, copylist)
 
 
-def test_structured(case: unittest.TestCase, origlist: List[T], type: Type[T]) -> None:
+def test_structured(case: unittest.TestCase, origlist: List[T],
+                    type: Type[T]) -> None:
     destructuredlist = [type.from_structured(  # type: ignore
         a.to_structured()) for a in origlist]  # type: ignore
     test_eq(case, origlist, destructuredlist)
@@ -60,14 +61,17 @@ def create_asset_allocs() -> List[AssetAllocation]:
 def create_ret_settings1(
         asset_allocs: List[AssetAllocation] = create_asset_allocs()
 ) -> RetirementSettings:
-    return RetirementSettings(10, (0.1, 0.01), 10, 1.1, asset_allocs)
+    return RetirementSettings(10, (0.1, 0.01), 10, 1.1,
+                              AssetDistribution(asset_allocs))
 
 
 def create_ret_settings() -> List[RetirementSettings]:
     asset_allocs = create_asset_allocs()
     return [create_ret_settings1(asset_allocs),
-            RetirementSettings(0, (0.0, 0.0), 0, 0.0, asset_allocs[1:2]),
-            RetirementSettings(10, (0.01, 0.1), 10, 1.1, asset_allocs)]
+            RetirementSettings(0, (0.0, 0.0), 0, 0.0,
+                               AssetDistribution(asset_allocs[1:2])),
+            RetirementSettings(10, (0.01, 0.1), 10, 1.1,
+                               AssetDistribution(asset_allocs))]
 
 
 class RetTypesTest(unittest.TestCase):
@@ -146,14 +150,17 @@ class RetTypesTest(unittest.TestCase):
         ret_settings.update_val(RValue(RSetting.EXPENDATURE), lambda _: 99)
         self.assertEqual(ret_settings.expendature, 99)
 
-        orig_alloc1_asset_value = ret_settings.asset_allocations[1].asset.value
+        orig_alloc1_asset_value = \
+            ret_settings.asset_distribution.asset_allocations[1].asset.value
         ret_settings.update_val(
-            RValue(RSetting.ASSET_ALLOCATIONS,
-                   (1, AllocationValue(AllocationSetting.ASSET,
-                                       AssetSetting.VALUE))),  # type: ignore
+            RValue(RSetting.ASSET_DISTRIBUTION,
+                   DistributionValue(DistributionSetting.ASSET_ALLOCATIONS,
+                                     (1, AllocationValue(AllocationSetting.ASSET,
+                                                         AssetSetting.VALUE)))),  # type: ignore
             lambda value: value + 1)
-        self.assertEqual(ret_settings.asset_allocations[1].asset.value,
-                         orig_alloc1_asset_value + 1)
+        self.assertEqual(
+            ret_settings.asset_distribution.asset_allocations[1].asset.value,
+            orig_alloc1_asset_value + 1)
 
         # TODO: Remaining member values
 
