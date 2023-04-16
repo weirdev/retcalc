@@ -54,12 +54,12 @@ def inflated_payments(payment: float, r: float, t: int) -> float:
 
 
 def retirement_value(retirementSettings: RetirementSettings) -> RetirementSettings:
-    inflation_s = random.gauss(*retirementSettings.inflation)
-    inflation_factor = 1 + inflation_s
-
     new_rs = retirementSettings.copy()
 
     while new_rs.t > 0:
+        inflation_s = random.gauss(*new_rs.inflation)
+        inflation_factor = 1 + inflation_s
+
         to_spend = new_rs.expendature
         hit_zero = False
         for ri, asset_alloc in enumerate(reversed(new_rs.asset_distribution.asset_allocations)):
