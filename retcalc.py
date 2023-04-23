@@ -31,6 +31,7 @@ def select_retirement_settings_file() -> Optional[str]:
     filepath = path.join(SAVED_SCENARIOS_DIRNAME, filename)
     return filepath
 
+
 def load_retirement_settings(filepath: str) -> Optional['RetirementSettings']:
     return RetirementSettings.from_structured(load_yaml(filepath))
 
@@ -339,7 +340,7 @@ def savings_required_for_expenditure_prompt():
         eret = (takefloat("Enter estimated mean equity return over this period", -1, 1),
                 takefloat("Enter estimated equity return standard deviation over this period", 0, 1))
         retirement_scenario = RetirementSettings(
-            expenditure, inflation, t, 0, 
+            expenditure, inflation, t, 0,
             AssetDistribution([AssetAllocation(Asset("Equities", 0, eret[0], eret[1]),
                                                0, 0, 0)]))
 
@@ -352,7 +353,7 @@ def savings_required_for_expenditure_prompt():
     maxexp = optimize_r_var(
         retirement_scenario,
         RValue(RSetting.ASSET_DISTRIBUTION,
-               DistributionValue(DistributionSetting.ASSET_ALLOCATIONS, 
+               DistributionValue(DistributionSetting.ASSET_ALLOCATIONS,
                                  (len(retirement_scenario.asset_distribution.asset_allocations)-1,
                                   AllocationValue(AllocationSetting.ASSET, AssetSetting.VALUE)))),  # type: ignore
         False, wcp)
@@ -377,7 +378,8 @@ if __name__ == '__main__':
     # print(rs.current_value())
 
     prompt_fns = [("Calculate max expenditure in retirement", safe_ret_expenditure_prompt),
-                  ("Calculate savings needed for retirement", savings_required_for_expenditure_prompt),
+                  ("Calculate savings needed for retirement",
+                   savings_required_for_expenditure_prompt),
                   ("Rewrite retirement scenario", rewrite_retirement_scenario_prompt)]
     prompt_fn = choose(prompt_fns)
     if prompt_fn:

@@ -17,9 +17,9 @@ class RetCalcTest(unittest.TestCase):
         rebalance_assets(rebalanced_assets)
 
         self.assertEqual(len(assets), len(rebalanced_assets))
-        self.assertAlmostEqual(sum_asset_allocs(assets), 
+        self.assertAlmostEqual(sum_asset_allocs(assets),
                                sum_asset_allocs(rebalanced_assets))
-        
+
     def test_rebalance_assets_complex(self):
         assets = [
             AssetAllocation(Asset("Asset1", 0.1, 0, 0), 0, 10.1, 0),
@@ -31,7 +31,7 @@ class RetCalcTest(unittest.TestCase):
 
         rebalanced_assets = [aa.copy() for aa in assets]
         rebalance_assets(rebalanced_assets)
-        
+
         self.assertEqual(len(assets), len(rebalanced_assets))
         self.assertAlmostEqual(sum_asset_allocs(assets),
                                sum_asset_allocs(rebalanced_assets))
@@ -45,15 +45,16 @@ class RetCalcTest(unittest.TestCase):
             try:
                 assets_by_priority[assets[i].priority][assets[i].asset.name] = assets[i]
             except KeyError:
-                assets_by_priority[assets[i].priority] = {assets[i].asset.name: assets[i]}
+                assets_by_priority[assets[i].priority] = {
+                    assets[i].asset.name: assets[i]}
             try:
-                rebalanced_assets_by_priority[rebalanced_assets[i].priority]\
-                    [rebalanced_assets[i].asset.name] = rebalanced_assets[i]
+                rebalanced_assets_by_priority[rebalanced_assets[i]
+                                              .priority][rebalanced_assets[i].asset.name] = rebalanced_assets[i]
             except KeyError:
                 rebalanced_assets_by_priority[rebalanced_assets[i].priority] = \
                     {rebalanced_assets[i].asset.name: rebalanced_assets[i]}
-            
-        self.assertEqual(len(assets_by_priority[0]), 
+
+        self.assertEqual(len(assets_by_priority[0]),
                          len(rebalanced_assets_by_priority[0]))
         # Highest priority assets should be at their minimum values
         self.assertAlmostEqual(

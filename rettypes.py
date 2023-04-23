@@ -10,7 +10,7 @@ class AssetSetting(Enum):
 
 
 class Asset:
-    def __init__(self, name: str, value: float, mean_return: float, 
+    def __init__(self, name: str, value: float, mean_return: float,
                  return_stdev: float):
         self.name: str = name
         self.value: float = value
@@ -123,22 +123,25 @@ class AssetAllocation:
                 self.asset == other.asset and
                 self.priority == other.priority and
                 self.minimum_value == other.minimum_value and
-                self.preferred_fraction_of_priority_class == \
-                    other.preferred_fraction_of_priority_class)
+                self.preferred_fraction_of_priority_class ==
+                other.preferred_fraction_of_priority_class)
 
     def __hash__(self) -> int:
         return hash((self.asset,
                      self.priority,
                      self.minimum_value,
                      self.preferred_fraction_of_priority_class))
-    
+
+
 class DistributionSetting(Enum):
     ASSET_ALLOCATIONS = 1
+
 
 class DistributionValue:
     def __init__(self, distribution_setting: DistributionSetting, allocation_value: Optional[Tuple[int, AllocationValue]] = None):
         self.distribution_setting = distribution_setting
         self.allocation_value = allocation_value
+
 
 class AssetDistribution:
     def __init__(self, asset_allocations: List[AssetAllocation]):
@@ -156,24 +159,26 @@ class AssetDistribution:
 
     def copy(self) -> 'AssetDistribution':
         return AssetDistribution([aa.copy() for aa in self.asset_allocations])
-    
+
     @staticmethod
     def from_structured(distribution_obj: dict) -> 'AssetDistribution':
-        asset_allocations = [AssetAllocation.from_structured(aa) for aa in distribution_obj["asset_allocations"]]
+        asset_allocations = [AssetAllocation.from_structured(
+            aa) for aa in distribution_obj["asset_allocations"]]
         return AssetDistribution(asset_allocations)
-    
+
     def to_structured(self) -> dict:
         distribution_obj = {}
-        distribution_obj["asset_allocations"] = [aa.to_structured() for aa in self.asset_allocations]
+        distribution_obj["asset_allocations"] = [
+            aa.to_structured() for aa in self.asset_allocations]
         return distribution_obj
-    
+
     def __eq__(self, other: object) -> bool:
         return (isinstance(other, AssetDistribution) and
                 set(self.asset_allocations) == set(other.asset_allocations))
-    
+
     def __hash__(self) -> int:
         return hash(frozenset(self.asset_allocations))
-    
+
     def current_value(self) -> float:
         return sum([aa.asset.value for aa in self.asset_allocations])
 
@@ -194,7 +199,7 @@ class RValue:
 
 class RetirementSettings:
     def __init__(self, expendature: float, inflation: Tuple[float, float],
-                 t: int, emergency_min: float, 
+                 t: int, emergency_min: float,
                  asset_distribution: AssetDistribution):
         self.expendature = expendature
         self.inflation = inflation
@@ -245,9 +250,10 @@ class RetirementSettings:
         t = ret_obj["t"]
         emergency_min = ret_obj["emergency_min"]
         if "asset_distribution" in ret_obj:
-            asset_distribution = AssetDistribution.from_structured(ret_obj["asset_distribution"])
-        else: # legacy
-            asset_allocations = [AssetAllocation.from_structured(aa) 
+            asset_distribution = AssetDistribution.from_structured(
+                ret_obj["asset_distribution"])
+        else:  # legacy
+            asset_allocations = [AssetAllocation.from_structured(aa)
                                  for aa in ret_obj["asset_allocations"]]
             asset_distribution = AssetDistribution(asset_allocations)
         return RetirementSettings(
