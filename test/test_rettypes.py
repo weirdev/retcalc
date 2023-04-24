@@ -55,7 +55,7 @@ def create_asset_allocs() -> List[AssetAllocation]:
     assets = create_assets()
     return [create_asset_alloc1(assets[0]),
             AssetAllocation(assets[1], 0, 0, 0),
-            AssetAllocation(assets[2], 1, 0.1, 10.1)]
+            AssetAllocation(assets[2], 1, 0.1, 0.2)]
 
 
 def create_ret_settings1(

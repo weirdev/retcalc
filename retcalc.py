@@ -10,7 +10,8 @@ from yaml_helper import load_yaml, dump_yaml
 SAVED_SCENARIOS_DIRNAME = "savedscenarios"
 
 
-def save_retirement_settings(scenario: 'RetirementSettings', filepath: Optional[str] = None):
+def save_retirement_settings(scenario: 'RetirementSettings', 
+                             filepath: Optional[str] = None):
     if filepath is None:
         filename = input("Filename [.yaml]: ").strip()
         if not filename.endswith(".yaml"):
@@ -76,8 +77,8 @@ def retirement_value(retirementSettings: RetirementSettings) -> RetirementSettin
 
         if not hit_zero:
             for asset_alloc in new_rs.asset_distribution.asset_allocations:
-                asset_alloc.asset.value *= (1 + random.gauss(asset_alloc.asset.mean_return,
-                                                             asset_alloc.asset.return_stdev))
+                asset_alloc.asset.value *= 1 + random.gauss(asset_alloc.asset.mean_return,
+                                                            asset_alloc.asset.return_stdev)
             rebalance_assets(new_rs.asset_distribution.asset_allocations)
 
         new_rs.expendature *= inflation_factor
@@ -98,8 +99,9 @@ def worst_case(runs: List[RetirementSettings], pmin: float):
     return runs[int(len(runs) * pmin)]
 
 
-def optimize_r_var(retirementSettings: RetirementSettings, r_var_to_opt: RValue, maximize: bool,
-                   pmin: float) -> float:
+def optimize_r_var(
+        retirementSettings: RetirementSettings, r_var_to_opt: RValue,
+        maximize: bool, pmin: float) -> float:
     low = 0
     high = 100
 
@@ -133,7 +135,12 @@ def optimize_r_var(retirementSettings: RetirementSettings, r_var_to_opt: RValue,
 
 
 def rebalance_assets(asset_allocations: List[AssetAllocation]) -> None:
-    total_assets = sum([a.asset.value for a in asset_allocations])
+    def get_and_clear_value(asset: Asset):
+        value = asset.value
+        asset.value = 0
+        return value
+    total_assets = sum([get_and_clear_value(aa.asset)
+                       for aa in asset_allocations])
     if total_assets == 0:
         return
     assert total_assets > 0
@@ -141,45 +148,79 @@ def rebalance_assets(asset_allocations: List[AssetAllocation]) -> None:
 
     priority_class: MutableSet[AssetAllocation] = set()
     priority = None
-    requested_pc_total = 0.0
+    pc_total_min_value = 0.0
+    pc_total_fraction = 0.0
     for i, asset_alloc in enumerate(asset_allocations):
         if priority is None:
             priority = asset_alloc.priority
         priority_class.add(asset_alloc)
-        requested_pc_total += asset_alloc.minimum_value
+        pc_total_min_value += asset_alloc.minimum_value
+        pc_total_fraction += asset_alloc.desired_fraction_of_total_assets
 
-        if (i + 1 < len(asset_allocations) and
-                priority < asset_allocations[i + 1].priority and
-                requested_pc_total > 0):
-            # If not enough remaining funds, distribute proportionally
-            # factor: (0, 1]
-            factor = min(remaining_assets / requested_pc_total, 1.0)
-            for aa in priority_class:
-                aa.asset.value = aa.minimum_value * factor
-                remaining_assets -= aa.asset.value
-            priority_class = set()
-            priority = None
-            requested_pc_total = 0.0
-        elif i + 1 == len(asset_allocations):
-            # At end of allocs so may have money beyond min requested
-            # Distribute proportionally
-            # factor: (0,inf)
-            if requested_pc_total == 0:
-                equalprop = remaining_assets / len(priority_class)
-                for aa in priority_class:
-                    aa.asset.value = equalprop
-                    remaining_assets -= aa.asset.value
+        if (i + 1 == len(asset_allocations) or
+                (priority < asset_allocations[i + 1].priority and
+                    (pc_total_min_value > 0 or pc_total_fraction > 0))):
+            # Reached end of priority class
+
+            if i + 1 == len(asset_allocations):
+                # At end of allocs so may have remaining assets
+                outstanding_fraction = remaining_assets / total_assets
+                last_pc = True
             else:
-                factor = remaining_assets / requested_pc_total
+                outstanding_fraction = pc_total_fraction
+                last_pc = False
+
+            if pc_total_min_value > 0:
+                # If not enough remaining funds, distribute proportionally
+                # factor: (0, 1]
+                factor = min(remaining_assets / pc_total_min_value, 1.0)
                 for aa in priority_class:
                     aa.asset.value = aa.minimum_value * factor
                     remaining_assets -= aa.asset.value
+                    if last_pc:  # At end of allocs, distribute everything
+                        outstanding_fraction -= aa.asset.value / total_assets
+                    else:  # Otherwise, distribute only requested fraction
+                        outstanding_fraction -= min(aa.asset.value / total_assets,
+                                                    aa.desired_fraction_of_total_assets)
+
+            if outstanding_fraction > 0:
+                amount_to_allocate = outstanding_fraction * total_assets
+                factor = min(remaining_assets / amount_to_allocate, 1.0)
+                equal_fraction_if_unallocated = 0
+                if last_pc:
+                    if pc_total_fraction == 0:
+                        # Last priority class and no fraction requested, so distribute equally
+                        equal_fraction_if_unallocated = outstanding_fraction / \
+                            len(priority_class)
+                    else:
+                        # Last priority class and fraction requested, so distribute proportionally
+                        # factor: (0, 1]
+                        # Normalize pc_total_fraction by the fraction of the total assets outstanding
+                        factor /= pc_total_fraction / outstanding_fraction
+
+                for aa in priority_class:
+                    new_asset_value = \
+                        max(aa.asset.value,
+                            max(aa.desired_fraction_of_total_assets,
+                                equal_fraction_if_unallocated)
+                            * factor * total_assets)
+                    remaining_assets -= new_asset_value - aa.asset.value
+                    aa.asset.value = new_asset_value
+
+            # Reset priority class
+            priority_class = set()
+            priority = None
+            pc_total_min_value = 0.0
+            pc_total_fraction = 0.0
+
+        if abs(remaining_assets) < 0.001:
+            break
 
     # We distributed all the $$
-    assert abs(remaining_assets) < 0.01
+    assert abs(remaining_assets) < 0.001
     # Total assets remains constant
     assert abs(total_assets -
-               sum([a.asset.value for a in asset_allocations])) < 0.01
+               sum([a.asset.value for a in asset_allocations])) < 0.001
 
 
 def rsettings_print(retirementSettings: RetirementSettings):
@@ -203,13 +244,14 @@ def asset_allocs_print(asset_allocations: List[AssetAllocation]):
         print(f"\tReturn stdev: ${alloc.asset.return_stdev*100:.2f}%")
         print(f"\tPriority: {alloc.priority}")
         print(f"\tMinimum value: {alloc.minimum_value}")
-        print(
-            f"\tPreferred fraction of priority class: {alloc.preferred_fraction_of_priority_class*100:.2f}%")
+        print(f"\tPreferred fraction of priority class: \
+              {alloc.desired_fraction_of_total_assets*100:.2f}%")
         print()
 
 
-def insert_alloc_set_priority(asset_alloc: AssetAllocation, priority: float,
-                              asset_allocations: List[AssetAllocation]):
+def insert_alloc_set_priority(
+        asset_alloc: AssetAllocation, priority: float,
+        asset_allocations: List[AssetAllocation]):
     idx = 0
     intpri = 0
     bump_pri = False
@@ -245,7 +287,8 @@ def choose_priority(asset_allocations: List[AssetAllocation]) -> float:
                 (f"Prioritize below {alloc.asset.name}", alloc.priority + 0.5))
         else:
             options.append(
-                (f"Prioritize between {alloc.asset.name} and {asset_allocations[i+1].asset.name}",
+                (f"Prioritize between {alloc.asset.name} and \
+                 {asset_allocations[i+1].asset.name}",
                  alloc.priority + 0.5))
 
     if len(options) > 0:
@@ -273,7 +316,8 @@ def safe_ret_expenditure_prompt():
             mean_return = takefloat(
                 f"Enter estimated mean {name} return over this period", -1, 1)
             return_stdev = takefloat(
-                f"Enter estimated current statemated {name} return standard deviation over this period", 0, 1)
+                f"Enter estimated current statemated {name} return \
+                    standard deviation over this period", 0, 1)
             asset = Asset(name, value, mean_return, return_stdev)
 
             insert_alloc_set_priority(
@@ -284,10 +328,12 @@ def safe_ret_expenditure_prompt():
                 [("Add another asset", True), ("Finished adding assets", False)])
         print()
         expenditure = - \
-            takefloat(
-                "Enter expected annual equity contributions over this period (your yearly savings) ($)")
-        inflation = (takefloat("Enter estimated mean inflation over this period", -1, 1),
-                     takefloat("Enter estimated inflation standard deviation over this period", 0, 1))
+            takefloat("Enter expected annual equity contributions over \
+                      this period (your yearly savings) ($)")
+        inflation = (takefloat("Enter estimated mean inflation over this period",
+                               -1, 1),
+                     takefloat("Enter estimated inflation standard deviation \
+                               over this period", 0, 1))
 
         current_state = RetirementSettings(
             expenditure, inflation, t, 0, AssetDistribution(allocations))
@@ -297,7 +343,8 @@ def safe_ret_expenditure_prompt():
 
     print()
     wcp = takefloat(
-        "Enter tail probability for Monte Carlo simulation (<0.5=worse than average result)", 0, 1)
+        "Enter tail probability for Monte Carlo simulation \
+            (<0.5=worse than average result)", 0, 1)
     print("Simulating 10,000 possible scenarios...")
     runs = simulate(current_state, 10_000)
     result_setting = worst_case(runs, wcp)
@@ -335,10 +382,14 @@ def savings_required_for_expenditure_prompt():
             "Enter amount to be withdrawn from equities yearly ($)", lbound=0)
         t = takeint(
             "Enter estimated whole number of years of retirement", lbound=1)
-        inflation = (takefloat("Enter estimated mean inflation over this period", -1, 1),
-                     takefloat("Enter estimated inflation standard deviation over this period", 0, 1))
-        eret = (takefloat("Enter estimated mean equity return over this period", -1, 1),
-                takefloat("Enter estimated equity return standard deviation over this period", 0, 1))
+        inflation = (takefloat("Enter estimated mean inflation over this period",
+                               -1, 1),
+                     takefloat("Enter estimated inflation standard deviation \
+                               over this period", 0, 1))
+        eret = (takefloat("Enter estimated mean equity return over this period",
+                          -1, 1),
+                takefloat("Enter estimated equity return standard deviation \
+                          over this period", 0, 1))
         retirement_scenario = RetirementSettings(
             expenditure, inflation, t, 0,
             AssetDistribution([AssetAllocation(Asset("Equities", 0, eret[0], eret[1]),
@@ -346,16 +397,18 @@ def savings_required_for_expenditure_prompt():
 
     print()
     wcp = takefloat(
-        "Enter tail probability for Monte Carlo simulation (<0.5=worse than average result)", 0, 1)
+        "Enter tail probability for Monte Carlo simulation \
+            (<0.5=worse than average result)", 0, 1)
 
     print()
     print("Binary searching possible retirement scenarios 10,000 times each...")
     maxexp = optimize_r_var(
         retirement_scenario,
         RValue(RSetting.ASSET_DISTRIBUTION,
-               DistributionValue(DistributionSetting.ASSET_ALLOCATIONS,
-                                 (len(retirement_scenario.asset_distribution.asset_allocations)-1,
-                                  AllocationValue(AllocationSetting.ASSET, AssetSetting.VALUE)))),  # type: ignore
+               DistributionValue(
+                   DistributionSetting.ASSET_ALLOCATIONS,
+                   (len(retirement_scenario.asset_distribution.asset_allocations)-1,
+                    AllocationValue(AllocationSetting.ASSET, AssetSetting.VALUE)))),  # type: ignore
         False, wcp)
     print(f"Minimum safe equity savings for retirement: ${maxexp:,.2f}")
 

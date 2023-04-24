@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Any, Callable, List, Literal, Type, Optional, Tuple
+from typing import Any, Callable, List, Optional, Tuple
 
 
 class AssetSetting(Enum):
@@ -64,7 +64,7 @@ class AllocationSetting(Enum):
     ASSET = 1
     PRIORITY = 2
     MINIMUM_VALUE = 3
-    PREFERRED_FRACTION_OF_PRIORITY_CLASS = 4
+    DESIRED_FRACTION_OF_TOTAL_ASSETS = 4
 
 
 class AllocationValue:
@@ -75,16 +75,17 @@ class AllocationValue:
 
 class AssetAllocation:
     def __init__(self, asset: Asset, priority: int, minimum_value: float,
-                 preferred_fraction_of_priority_class: float):
+                 desired_fraction_of_total_assets: float):
         self.asset = asset
         self.priority = priority
         self.minimum_value = minimum_value
-        self.preferred_fraction_of_priority_class = \
-            preferred_fraction_of_priority_class
+        assert 0 <= desired_fraction_of_total_assets <= 1
+        self.desired_fraction_of_total_assets = \
+            desired_fraction_of_total_assets
 
     def copy(self) -> 'AssetAllocation':
         return AssetAllocation(self.asset.copy(), self.priority, self.minimum_value,
-                               self.preferred_fraction_of_priority_class)
+                               self.desired_fraction_of_total_assets)
 
     def update_val(self, avalue: AllocationValue, op: Callable[[Any], Any]):
         asetting = avalue.allocation_setting
@@ -97,25 +98,28 @@ class AssetAllocation:
             self.priority = op(self.priority)
         elif asetting == AllocationSetting.MINIMUM_VALUE:
             self.minimum_value = op(self.minimum_value)
-        elif asetting == AllocationSetting.PREFERRED_FRACTION_OF_PRIORITY_CLASS:
-            self.preferred_fraction_of_priority_class = op(
-                self.preferred_fraction_of_priority_class)
+        elif asetting == AllocationSetting.DESIRED_FRACTION_OF_TOTAL_ASSETS:
+            self.desired_fraction_of_total_assets = op(
+                self.desired_fraction_of_total_assets)
 
     @staticmethod
     def from_structured(alloc_obj: dict) -> 'AssetAllocation':
         asset = Asset.from_structured(alloc_obj["asset"])
         priority = alloc_obj["priority"]
         minimum_value = alloc_obj["minimum_value"]
-        preferred_fraction_of_priority_class = alloc_obj["preferred_fraction_of_priority_class"]
-        return AssetAllocation(asset, priority, minimum_value, preferred_fraction_of_priority_class)
+        if "desired_fraction_of_total_assets" in alloc_obj:
+            desired_fraction_of_total_assets = alloc_obj["desired_fraction_of_total_assets"]
+        else:
+            desired_fraction_of_total_assets = alloc_obj["preferred_fraction_of_priority_class"]
+        return AssetAllocation(asset, priority, minimum_value, desired_fraction_of_total_assets)
 
     def to_structured(self) -> dict:
         alloc_obj = {}
         alloc_obj["asset"] = self.asset.to_structured()
         alloc_obj["priority"] = self.priority
         alloc_obj["minimum_value"] = self.minimum_value
-        alloc_obj["preferred_fraction_of_priority_class"] = \
-            self.preferred_fraction_of_priority_class
+        alloc_obj["desired_fraction_of_total_assets"] = \
+            self.desired_fraction_of_total_assets
         return alloc_obj
 
     def __eq__(self, other: object) -> bool:
@@ -123,14 +127,14 @@ class AssetAllocation:
                 self.asset == other.asset and
                 self.priority == other.priority and
                 self.minimum_value == other.minimum_value and
-                self.preferred_fraction_of_priority_class ==
-                other.preferred_fraction_of_priority_class)
+                self.desired_fraction_of_total_assets ==
+                    other.desired_fraction_of_total_assets)
 
     def __hash__(self) -> int:
         return hash((self.asset,
                      self.priority,
                      self.minimum_value,
-                     self.preferred_fraction_of_priority_class))
+                     self.desired_fraction_of_total_assets))
 
 
 class DistributionSetting(Enum):
