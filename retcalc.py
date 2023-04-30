@@ -243,7 +243,7 @@ def asset_allocs_print(asset_allocations: List[AssetAllocation]):
         print(f"\tMean return: ${alloc.asset.mean_return*100:.2f}%")
         print(f"\tReturn stdev: ${alloc.asset.return_stdev*100:.2f}%")
         print(f"\tPriority: {alloc.priority}")
-        print(f"\tMinimum value: {alloc.minimum_value}")
+        print(f"\tMinimum value: ${alloc.minimum_value:,.2f}")
         print(f"\tPreferred fraction of priority class: \
               {alloc.desired_fraction_of_total_assets*100:.2f}%")
         print()
