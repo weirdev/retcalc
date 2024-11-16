@@ -486,6 +486,10 @@ def savings_required_for_expenditure_prompt():
 
     print()
     print("Binary searching possible retirement scenarios 10,000 times each...")
+    # ignore
+    asset_value = AllocationValue(
+        AllocationSetting.ASSET, AssetSetting.VALUE  # type:ignore
+    )
     maxexp = optimize_r_var(
         retirement_scenario,
         RValue(
@@ -494,7 +498,7 @@ def savings_required_for_expenditure_prompt():
                 DistributionSetting.ASSET_ALLOCATIONS,
                 (
                     len(retirement_scenario.asset_distribution.asset_allocations) - 1,
-                    AllocationValue(AllocationSetting.ASSET, AssetSetting.VALUE),
+                    asset_value,
                 ),
             ),
         ),  # type: ignore
