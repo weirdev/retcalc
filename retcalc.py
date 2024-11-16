@@ -192,8 +192,7 @@ def rebalance_assets(asset_allocations: List[AssetAllocation]) -> None:
                 if last_pc:
                     if pc_total_fraction == 0:
                         # Last priority class and no fraction requested, so distribute equally
-                        equal_fraction_if_unallocated = outstanding_fraction / \
-                            len(priority_class)
+                        equal_fraction_if_unallocated = outstanding_fraction / len(priority_class)
                     else:
                         # Last priority class and fraction requested, so distribute proportionally
                         # factor: (0, 1]
@@ -201,11 +200,11 @@ def rebalance_assets(asset_allocations: List[AssetAllocation]) -> None:
                         factor /= pc_total_fraction / outstanding_fraction
 
                 for aa in priority_class:
-                    new_asset_value = \
+                    new_asset_value = (
                         max(aa.asset.value,
                             max(aa.desired_fraction_of_total_assets,
                                 equal_fraction_if_unallocated)
-                            * factor * total_assets)
+                            * factor * total_assets))
                     remaining_assets -= new_asset_value - aa.asset.value
                     aa.asset.value = new_asset_value
 
@@ -246,8 +245,8 @@ def asset_allocs_print(asset_allocations: List[AssetAllocation]):
         print(f"\tReturn stdev: ${alloc.asset.return_stdev*100:.2f}%")
         print(f"\tPriority: {alloc.priority}")
         print(f"\tMinimum value: ${alloc.minimum_value:,.2f}")
-        print(f"\tPreferred fraction of priority class: \
-              {alloc.desired_fraction_of_total_assets*100:.2f}%")
+        print("\tPreferred fraction of priority class: " +
+               f"{alloc.desired_fraction_of_total_assets*100:.2f}%")
         print()
 
 
@@ -289,8 +288,8 @@ def choose_priority(asset_allocations: List[AssetAllocation]) -> float:
                 (f"Prioritize below {alloc.asset.name}", alloc.priority + 0.5))
         else:
             options.append(
-                (f"Prioritize between {alloc.asset.name} and \
-                 {asset_allocations[i+1].asset.name}",
+                (f"Prioritize between {alloc.asset.name} and " +
+                 f"{asset_allocations[i+1].asset.name}",
                  alloc.priority + 0.5))
 
     if len(options) > 0:
@@ -318,8 +317,7 @@ def safe_ret_expenditure_prompt():
             mean_return = takefloat(
                 f"Enter estimated mean {name} return over this period", -1, 1)
             return_stdev = takefloat(
-                f"Enter estimated current statemated {name} return \
-                    standard deviation over this period", 0, 1)
+                f"Enter estimated {name} return standard deviation over this period", 0, 1)
             asset = Asset(name, value, mean_return, return_stdev)
 
             insert_alloc_set_priority(
@@ -329,13 +327,13 @@ def safe_ret_expenditure_prompt():
             add_asset = choose(
                 [("Add another asset", True), ("Finished adding assets", False)])
         print()
-        expenditure = - \
-            takefloat("Enter expected annual equity contributions over \
-                      this period (your yearly savings) ($)")
+        expenditure = -takefloat(
+            "Enter expected annual equity contributions over " +
+             "this period (your yearly savings) ($)")
         inflation = (takefloat("Enter estimated mean inflation over this period",
                                -1, 1),
-                     takefloat("Enter estimated inflation standard deviation \
-                               over this period", 0, 1))
+                     takefloat("Enter estimated inflation standard deviation " +
+                                "over this period", 0, 1))
 
         current_state = RetirementSettings(
             expenditure, inflation, t, 0, AssetDistribution(allocations))
@@ -345,8 +343,8 @@ def safe_ret_expenditure_prompt():
 
     print()
     wcp = takefloat(
-        "Enter tail probability for Monte Carlo simulation \
-            (<0.5=worse than average result)", 0, 1)
+        "Enter tail probability for Monte Carlo simulation " +
+            "(<0.5=worse than average result)", 0, 1)
     print("Simulating 10,000 possible scenarios...")
     runs = simulate(current_state, 10_000)
     result_setting = worst_case(runs, wcp)
@@ -386,12 +384,12 @@ def savings_required_for_expenditure_prompt():
             "Enter estimated whole number of years of retirement", lbound=1)
         inflation = (takefloat("Enter estimated mean inflation over this period",
                                -1, 1),
-                     takefloat("Enter estimated inflation standard deviation \
-                               over this period", 0, 1))
+                     takefloat("Enter estimated inflation standard deviation " +
+                               "over this period", 0, 1))
         eret = (takefloat("Enter estimated mean equity return over this period",
                           -1, 1),
-                takefloat("Enter estimated equity return standard deviation \
-                          over this period", 0, 1))
+                takefloat("Enter estimated equity return standard deviation " +
+                          "over this period", 0, 1))
         retirement_scenario = RetirementSettings(
             expenditure, inflation, t, 0,
             AssetDistribution([AssetAllocation(Asset("Equities", 0, eret[0], eret[1]),
@@ -399,8 +397,8 @@ def savings_required_for_expenditure_prompt():
 
     print()
     wcp = takefloat(
-        "Enter tail probability for Monte Carlo simulation \
-            (<0.5=worse than average result)", 0, 1)
+        "Enter tail probability for Monte Carlo simulation " +
+            "(<0.5=worse than average result)", 0, 1)
 
     print()
     print("Binary searching possible retirement scenarios 10,000 times each...")

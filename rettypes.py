@@ -77,6 +77,7 @@ class AssetAllocation:
     def __init__(self, asset: Asset, priority: int, minimum_value: float,
                  desired_fraction_of_total_assets: float):
         self.asset = asset
+        # Lower priority numbers have greater priority
         self.priority = priority
         self.minimum_value = minimum_value
         assert 0 <= desired_fraction_of_total_assets <= 1
