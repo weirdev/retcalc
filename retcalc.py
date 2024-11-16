@@ -1,4 +1,4 @@
-from os import path, listdir
+from os import path, listdir, mkdir
 import random
 from typing import List, Optional, MutableSet, Tuple
 
@@ -21,6 +21,8 @@ def save_retirement_settings(scenario: 'RetirementSettings',
 
 
 def select_retirement_settings_file() -> Optional[str]:
+    if not path.isdir(SAVED_SCENARIOS_DIRNAME):
+        mkdir(SAVED_SCENARIOS_DIRNAME)
     files = [(filename, filename)
              for filename in listdir(SAVED_SCENARIOS_DIRNAME)]
     if len(files) == 0:
