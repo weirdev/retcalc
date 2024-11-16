@@ -189,7 +189,7 @@ class AssetDistribution:
 
 
 class RSetting(Enum):
-    EXPENDATURE = 1
+    expenditure = 1
     INFLATION = 5
     T = 7
     EMERGENCY_MIN = 8
@@ -203,10 +203,10 @@ class RValue:
 
 
 class RetirementSettings:
-    def __init__(self, expendature: float, inflation: Tuple[float, float],
+    def __init__(self, expenditure: float, inflation: Tuple[float, float],
                  t: int, emergency_min: float,
                  asset_distribution: AssetDistribution):
-        self.expendature = expendature
+        self.expenditure = expenditure
         self.inflation = inflation
         self.t = t
         self.emergency_min = emergency_min
@@ -214,8 +214,8 @@ class RetirementSettings:
 
     def update_val(self, rvalue: RValue, op: Callable[[Any], Any]) -> None:
         rsetting = rvalue.rsetting
-        if rsetting == RSetting.EXPENDATURE:
-            self.expendature = op(self.expendature)
+        if rsetting == RSetting.expenditure:
+            self.expenditure = op(self.expenditure)
         elif rsetting == RSetting.INFLATION:
             self.inflation = op(self.inflation)
         elif rsetting == RSetting.T:
@@ -229,8 +229,8 @@ class RetirementSettings:
                 self.asset_distribution.update_val(rvalue.dvalue, op)
 
     def get_val(self, rsetting: RSetting) -> Any:
-        if rsetting == RSetting.EXPENDATURE:
-            return self.expendature
+        if rsetting == RSetting.expenditure:
+            return self.expenditure
         elif rsetting == RSetting.INFLATION:
             return self.inflation
         elif rsetting == RSetting.T:
@@ -244,13 +244,13 @@ class RetirementSettings:
         return self.asset_distribution.current_value()
 
     def copy(self) -> 'RetirementSettings':
-        return RetirementSettings(self.expendature, self.inflation, self.t,
+        return RetirementSettings(self.expenditure, self.inflation, self.t,
                                   self.emergency_min,
                                   self.asset_distribution.copy())
 
     @staticmethod
     def from_structured(ret_obj: dict) -> 'RetirementSettings':
-        expendature = ret_obj["expendature"]
+        expenditure = ret_obj["expenditure"]
         inflation = tuple(ret_obj["inflation"])
         t = ret_obj["t"]
         emergency_min = ret_obj["emergency_min"]
@@ -262,11 +262,11 @@ class RetirementSettings:
                                  for aa in ret_obj["asset_allocations"]]
             asset_distribution = AssetDistribution(asset_allocations)
         return RetirementSettings(
-            expendature, inflation, t, emergency_min, asset_distribution)
+            expenditure, inflation, t, emergency_min, asset_distribution)
 
     def to_structured(self) -> dict:
         ret_obj = {}
-        ret_obj["expendature"] = self.expendature
+        ret_obj["expenditure"] = self.expenditure
         ret_obj["inflation"] = list(self.inflation)
         ret_obj["t"] = self.t
         ret_obj["emergency_min"] = self.emergency_min
@@ -275,14 +275,14 @@ class RetirementSettings:
 
     def __eq__(self, other: object) -> bool:
         return (isinstance(other, RetirementSettings) and
-                self.expendature == other.expendature and
+                self.expenditure == other.expenditure and
                 self.inflation == other.inflation and
                 self.t == other.t and
                 self.emergency_min == other.emergency_min and
                 self.asset_distribution == other.asset_distribution)
 
     def __hash__(self) -> int:
-        return hash((self.expendature,
+        return hash((self.expenditure,
                      self.inflation,
                      self.t,
                      self.emergency_min,

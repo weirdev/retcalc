@@ -147,8 +147,8 @@ class RetTypesTest(unittest.TestCase):
     def test_ret_settings_update_values(self):
         ret_settings = create_ret_settings1()
 
-        ret_settings.update_val(RValue(RSetting.EXPENDATURE), lambda _: 99)
-        self.assertEqual(ret_settings.expendature, 99)
+        ret_settings.update_val(RValue(RSetting.expenditure), lambda _: 99)
+        self.assertEqual(ret_settings.expenditure, 99)
 
         orig_alloc1_asset_value = \
             ret_settings.asset_distribution.asset_allocations[1].asset.value
