@@ -57,10 +57,7 @@ def inflated_payments(payment: float, r: float, t: int) -> float:
     return total
 
 
-def retirement_value(
-    retirementSettings: RetirementSettings,
-    expenditure_reduction_frac: Optional[float] = None,
-) -> RetirementSettings:
+def retirement_value(retirementSettings: RetirementSettings) -> RetirementSettings:
     """Main simulation loop.
 
     @expenditure_reduction_frac: Reduce next year's expenditure by this fraction after
@@ -74,8 +71,11 @@ def retirement_value(
         inflation_factor = 1 + inflation_s
 
         to_spend = new_rs.expenditure
-        if reduce_expenditure and expenditure_reduction_frac is not None:
-            to_spend *= 1 - expenditure_reduction_frac
+        if (
+            reduce_expenditure
+            and retirementSettings.expenditure_reduction_frac is not None
+        ):
+            to_spend *= 1 - retirementSettings.expenditure_reduction_frac
             reduce_expenditure = False
         hit_zero = False
         for ri, asset_alloc in enumerate(
@@ -98,7 +98,7 @@ def retirement_value(
                 )
                 # If expenditure is negative, we are earning not spending
                 reduce_expenditure = (
-                    expenditure_reduction_frac is not None
+                    retirementSettings.expenditure_reduction_frac is not None
                     and new_rs.expenditure > 0
                     and asset_return < asset_alloc.asset.mean_return
                 )
@@ -394,9 +394,22 @@ def safe_ret_expenditure_prompt():
                 1,
             ),
         )
+        expenditure_reduction_frac = takefloat(
+            "Enter fraction of expenditure to reduce after a year where any asset "
+            + "performs worse than its mean return (0 to disable)",
+            0,
+            1,
+        )
+        if expenditure_reduction_frac == 0:
+            expenditure_reduction_frac = None
 
         current_state = RetirementSettings(
-            expenditure, inflation, t, 0, AssetDistribution(allocations)
+            expenditure,
+            inflation,
+            t,
+            0,
+            AssetDistribution(allocations),
+            expenditure_reduction_frac,
         )
 
         if takebool("Save pre-retirement scenario to disk?"):
@@ -424,7 +437,7 @@ def safe_ret_expenditure_prompt():
     retirement_start = result_setting.copy()
     retirement_start.expenditure = 0
     retirement_start.t = t
-    maxexp = optimize_r_var(retirement_start, RValue(RSetting.expenditure), True, wcp)
+    maxexp = optimize_r_var(retirement_start, RValue(RSetting.EXPENDITURE), True, wcp)
     print(f"Maximum safe yearly expenditure in retirement: ${maxexp:,.2f}")
 
     print()
@@ -474,6 +487,7 @@ def savings_required_for_expenditure_prompt():
             AssetDistribution(
                 [AssetAllocation(Asset("Equities", 0, eret[0], eret[1]), 0, 0, 0)]
             ),
+            None,  # expenditure_reduction_frac
         )
 
     print()

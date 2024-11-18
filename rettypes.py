@@ -10,14 +10,15 @@ class AssetSetting(Enum):
 
 
 class Asset:
-    def __init__(self, name: str, value: float, mean_return: float,
-                 return_stdev: float):
+    def __init__(
+        self, name: str, value: float, mean_return: float, return_stdev: float
+    ):
         self.name: str = name
         self.value: float = value
         self.mean_return: float = mean_return
         self.return_stdev: float = return_stdev
 
-    def copy(self) -> 'Asset':
+    def copy(self) -> "Asset":
         return Asset(self.name, self.value, self.mean_return, self.return_stdev)
 
     def update_val(self, asset_setting: AssetSetting, op: Callable[[Any], Any]):
@@ -31,7 +32,7 @@ class Asset:
             self.return_stdev = op(self.return_stdev)
 
     @staticmethod
-    def from_structured(assetObj: dict) -> 'Asset':
+    def from_structured(assetObj: dict) -> "Asset":
         name = assetObj["name"]
         value = assetObj["value"]
         mean_return = assetObj["mean_return"]
@@ -47,17 +48,16 @@ class Asset:
         return assetObj
 
     def __eq__(self, other: object) -> bool:
-        return (isinstance(other, Asset) and
-                self.name == other.name and
-                self.value == other.value and
-                self.mean_return == other.mean_return and
-                self.return_stdev == other.return_stdev)
+        return (
+            isinstance(other, Asset)
+            and self.name == other.name
+            and self.value == other.value
+            and self.mean_return == other.mean_return
+            and self.return_stdev == other.return_stdev
+        )
 
     def __hash__(self) -> int:
-        return hash((self.name,
-                     self.value,
-                     self.mean_return,
-                     self.return_stdev))
+        return hash((self.name, self.value, self.mean_return, self.return_stdev))
 
 
 class AllocationSetting(Enum):
@@ -74,19 +74,27 @@ class AllocationValue:
 
 
 class AssetAllocation:
-    def __init__(self, asset: Asset, priority: int, minimum_value: float,
-                 desired_fraction_of_total_assets: float):
+    def __init__(
+        self,
+        asset: Asset,
+        priority: int,
+        minimum_value: float,
+        desired_fraction_of_total_assets: float,
+    ):
         self.asset = asset
         # Lower priority numbers have greater priority
         self.priority = priority
         self.minimum_value = minimum_value
         assert 0 <= desired_fraction_of_total_assets <= 1
-        self.desired_fraction_of_total_assets = \
-            desired_fraction_of_total_assets
+        self.desired_fraction_of_total_assets = desired_fraction_of_total_assets
 
-    def copy(self) -> 'AssetAllocation':
-        return AssetAllocation(self.asset.copy(), self.priority, self.minimum_value,
-                               self.desired_fraction_of_total_assets)
+    def copy(self) -> "AssetAllocation":
+        return AssetAllocation(
+            self.asset.copy(),
+            self.priority,
+            self.minimum_value,
+            self.desired_fraction_of_total_assets,
+        )
 
     def update_val(self, avalue: AllocationValue, op: Callable[[Any], Any]):
         asetting = avalue.allocation_setting
@@ -101,41 +109,55 @@ class AssetAllocation:
             self.minimum_value = op(self.minimum_value)
         elif asetting == AllocationSetting.DESIRED_FRACTION_OF_TOTAL_ASSETS:
             self.desired_fraction_of_total_assets = op(
-                self.desired_fraction_of_total_assets)
+                self.desired_fraction_of_total_assets
+            )
 
     @staticmethod
-    def from_structured(alloc_obj: dict) -> 'AssetAllocation':
+    def from_structured(alloc_obj: dict) -> "AssetAllocation":
         asset = Asset.from_structured(alloc_obj["asset"])
         priority = alloc_obj["priority"]
         minimum_value = alloc_obj["minimum_value"]
         if "desired_fraction_of_total_assets" in alloc_obj:
-            desired_fraction_of_total_assets = alloc_obj["desired_fraction_of_total_assets"]
+            desired_fraction_of_total_assets = alloc_obj[
+                "desired_fraction_of_total_assets"
+            ]
         else:
-            desired_fraction_of_total_assets = alloc_obj["preferred_fraction_of_priority_class"]
-        return AssetAllocation(asset, priority, minimum_value, desired_fraction_of_total_assets)
+            desired_fraction_of_total_assets = alloc_obj[
+                "preferred_fraction_of_priority_class"
+            ]
+        return AssetAllocation(
+            asset, priority, minimum_value, desired_fraction_of_total_assets
+        )
 
     def to_structured(self) -> dict:
         alloc_obj = {}
         alloc_obj["asset"] = self.asset.to_structured()
         alloc_obj["priority"] = self.priority
         alloc_obj["minimum_value"] = self.minimum_value
-        alloc_obj["desired_fraction_of_total_assets"] = \
+        alloc_obj["desired_fraction_of_total_assets"] = (
             self.desired_fraction_of_total_assets
+        )
         return alloc_obj
 
     def __eq__(self, other: object) -> bool:
-        return (isinstance(other, AssetAllocation) and
-                self.asset == other.asset and
-                self.priority == other.priority and
-                self.minimum_value == other.minimum_value and
-                self.desired_fraction_of_total_assets ==
-                    other.desired_fraction_of_total_assets)
+        return (
+            isinstance(other, AssetAllocation)
+            and self.asset == other.asset
+            and self.priority == other.priority
+            and self.minimum_value == other.minimum_value
+            and self.desired_fraction_of_total_assets
+            == other.desired_fraction_of_total_assets
+        )
 
     def __hash__(self) -> int:
-        return hash((self.asset,
-                     self.priority,
-                     self.minimum_value,
-                     self.desired_fraction_of_total_assets))
+        return hash(
+            (
+                self.asset,
+                self.priority,
+                self.minimum_value,
+                self.desired_fraction_of_total_assets,
+            )
+        )
 
 
 class DistributionSetting(Enum):
@@ -143,7 +165,11 @@ class DistributionSetting(Enum):
 
 
 class DistributionValue:
-    def __init__(self, distribution_setting: DistributionSetting, allocation_value: Optional[Tuple[int, AllocationValue]] = None):
+    def __init__(
+        self,
+        distribution_setting: DistributionSetting,
+        allocation_value: Optional[Tuple[int, AllocationValue]] = None,
+    ):
         self.distribution_setting = distribution_setting
         self.allocation_value = allocation_value
 
@@ -162,24 +188,28 @@ class AssetDistribution:
                 index, avalue = dvalue.allocation_value
                 self.asset_allocations[index].update_val(avalue, op)
 
-    def copy(self) -> 'AssetDistribution':
+    def copy(self) -> "AssetDistribution":
         return AssetDistribution([aa.copy() for aa in self.asset_allocations])
 
     @staticmethod
-    def from_structured(distribution_obj: dict) -> 'AssetDistribution':
-        asset_allocations = [AssetAllocation.from_structured(
-            aa) for aa in distribution_obj["asset_allocations"]]
+    def from_structured(distribution_obj: dict) -> "AssetDistribution":
+        asset_allocations = [
+            AssetAllocation.from_structured(aa)
+            for aa in distribution_obj["asset_allocations"]
+        ]
         return AssetDistribution(asset_allocations)
 
     def to_structured(self) -> dict:
         distribution_obj = {}
         distribution_obj["asset_allocations"] = [
-            aa.to_structured() for aa in self.asset_allocations]
+            aa.to_structured() for aa in self.asset_allocations
+        ]
         return distribution_obj
 
     def __eq__(self, other: object) -> bool:
-        return (isinstance(other, AssetDistribution) and
-                set(self.asset_allocations) == set(other.asset_allocations))
+        return isinstance(other, AssetDistribution) and set(
+            self.asset_allocations
+        ) == set(other.asset_allocations)
 
     def __hash__(self) -> int:
         return hash(frozenset(self.asset_allocations))
@@ -189,11 +219,12 @@ class AssetDistribution:
 
 
 class RSetting(Enum):
-    expenditure = 1
+    EXPENDITURE = 1
     INFLATION = 5
     T = 7
     EMERGENCY_MIN = 8
     ASSET_DISTRIBUTION = 9
+    EXPENDITURE_REDUCTION_FRAC = 10
 
 
 class RValue:
@@ -203,18 +234,25 @@ class RValue:
 
 
 class RetirementSettings:
-    def __init__(self, expenditure: float, inflation: Tuple[float, float],
-                 t: int, emergency_min: float,
-                 asset_distribution: AssetDistribution):
+    def __init__(
+        self,
+        expenditure: float,
+        inflation: Tuple[float, float],
+        t: int,
+        emergency_min: float,
+        asset_distribution: AssetDistribution,
+        expenditure_reduction_frac: Optional[float],
+    ):
         self.expenditure = expenditure
         self.inflation = inflation
         self.t = t
         self.emergency_min = emergency_min
         self.asset_distribution = asset_distribution
+        self.expenditure_reduction_frac = expenditure_reduction_frac
 
     def update_val(self, rvalue: RValue, op: Callable[[Any], Any]) -> None:
         rsetting = rvalue.rsetting
-        if rsetting == RSetting.expenditure:
+        if rsetting == RSetting.EXPENDITURE:
             self.expenditure = op(self.expenditure)
         elif rsetting == RSetting.INFLATION:
             self.inflation = op(self.inflation)
@@ -227,9 +265,11 @@ class RetirementSettings:
                 self.asset_distribution = op(self.asset_distribution)
             else:
                 self.asset_distribution.update_val(rvalue.dvalue, op)
+        elif rsetting == RSetting.EXPENDITURE_REDUCTION_FRAC:
+            self.expenditure_reduction_frac = op(self.expenditure_reduction_frac)
 
     def get_val(self, rsetting: RSetting) -> Any:
-        if rsetting == RSetting.expenditure:
+        if rsetting == RSetting.EXPENDITURE:
             return self.expenditure
         elif rsetting == RSetting.INFLATION:
             return self.inflation
@@ -239,30 +279,53 @@ class RetirementSettings:
             return self.emergency_min
         elif rsetting == RSetting.ASSET_DISTRIBUTION:
             return self.asset_distribution
+        elif rsetting == RSetting.EXPENDITURE_REDUCTION_FRAC:
+            return self.expenditure_reduction_frac
 
     def current_value(self) -> float:
         return self.asset_distribution.current_value()
 
-    def copy(self) -> 'RetirementSettings':
-        return RetirementSettings(self.expenditure, self.inflation, self.t,
-                                  self.emergency_min,
-                                  self.asset_distribution.copy())
+    def copy(self) -> "RetirementSettings":
+        return RetirementSettings(
+            self.expenditure,
+            self.inflation,
+            self.t,
+            self.emergency_min,
+            self.asset_distribution.copy(),
+            self.expenditure_reduction_frac,
+        )
 
     @staticmethod
-    def from_structured(ret_obj: dict) -> 'RetirementSettings':
+    def from_structured(ret_obj: dict) -> "RetirementSettings":
         expenditure = ret_obj["expenditure"]
         inflation = tuple(ret_obj["inflation"])
         t = ret_obj["t"]
         emergency_min = ret_obj["emergency_min"]
+
         if "asset_distribution" in ret_obj:
             asset_distribution = AssetDistribution.from_structured(
-                ret_obj["asset_distribution"])
+                ret_obj["asset_distribution"]
+            )
         else:  # legacy
-            asset_allocations = [AssetAllocation.from_structured(aa)
-                                 for aa in ret_obj["asset_allocations"]]
+            asset_allocations = [
+                AssetAllocation.from_structured(aa)
+                for aa in ret_obj["asset_allocations"]
+            ]
             asset_distribution = AssetDistribution(asset_allocations)
+
+        if "expenditure_reduction_frac" in ret_obj:
+            expenditure_reduction_frac = ret_obj["expenditure_reduction_frac"]
+        else:
+            expenditure_reduction_frac = None
+
         return RetirementSettings(
-            expenditure, inflation, t, emergency_min, asset_distribution)
+            expenditure,
+            inflation,
+            t,
+            emergency_min,
+            asset_distribution,
+            expenditure_reduction_frac,
+        )
 
     def to_structured(self) -> dict:
         ret_obj = {}
@@ -274,16 +337,22 @@ class RetirementSettings:
         return ret_obj
 
     def __eq__(self, other: object) -> bool:
-        return (isinstance(other, RetirementSettings) and
-                self.expenditure == other.expenditure and
-                self.inflation == other.inflation and
-                self.t == other.t and
-                self.emergency_min == other.emergency_min and
-                self.asset_distribution == other.asset_distribution)
+        return (
+            isinstance(other, RetirementSettings)
+            and self.expenditure == other.expenditure
+            and self.inflation == other.inflation
+            and self.t == other.t
+            and self.emergency_min == other.emergency_min
+            and self.asset_distribution == other.asset_distribution
+        )
 
     def __hash__(self) -> int:
-        return hash((self.expenditure,
-                     self.inflation,
-                     self.t,
-                     self.emergency_min,
-                     self.asset_distribution))
+        return hash(
+            (
+                self.expenditure,
+                self.inflation,
+                self.t,
+                self.emergency_min,
+                self.asset_distribution,
+            )
+        )
