@@ -177,6 +177,59 @@ def optimize_r_var(
     return high
 
 
+def distribute_final_priority_class(
+    members: List[AssetAllocation], remaining: float
+) -> None:
+    """Distribute the funds of the final priority class.
+
+    The final class must absorb every dollar left over from higher-priority
+    classes. Each asset's current value (its minimum-value allocation) is
+    treated as a floor. The class budget (floors + `remaining`) is split so
+    values track each asset's desired fraction, respecting those floors. Assets
+    with no desired fraction share equally. All funds are allocated, so the
+    caller can treat `remaining` as fully consumed."""
+    if not members:
+        return
+
+    floors = [aa.asset.value for aa in members]
+    weights = [aa.desired_fraction_of_total_assets for aa in members]
+    budget = sum(floors) + remaining
+    if sum(weights) == 0:
+        # No fraction preferences in this class, so weight everything equally.
+        weights = [1.0] * len(members)
+
+    # Water-filling: assets whose floor exceeds their proportional share are
+    # pinned to their floor, and the rest split what remains proportionally.
+    fixed = [False] * len(members)
+    while True:
+        free = [j for j in range(len(members)) if not fixed[j]]
+        if not free:
+            break
+        free_weight = sum(weights[j] for j in free)
+        if free_weight == 0:
+            # Remaining free assets express no preference; weight them equally.
+            for j in free:
+                weights[j] = 1.0
+            free_weight = float(len(free))
+        available = budget - sum(floors[j] for j in range(len(members)) if fixed[j])
+        newly_fixed = [
+            j
+            for j in free
+            if floors[j] > available * weights[j] / free_weight + 1e-9
+        ]
+        if newly_fixed:
+            for j in newly_fixed:
+                fixed[j] = True
+            continue
+        for j in free:
+            members[j].asset.value = available * weights[j] / free_weight
+        break
+
+    for j in range(len(members)):
+        if fixed[j]:
+            members[j].asset.value = floors[j]
+
+
 def rebalance_assets(asset_allocations: List[AssetAllocation]) -> None:
     def get_and_clear_value(asset: Asset):
         value = asset.value
@@ -221,39 +274,29 @@ def rebalance_assets(asset_allocations: List[AssetAllocation]) -> None:
                 for aa in priority_class:
                     aa.asset.value = aa.minimum_value * factor
                     remaining_assets -= aa.asset.value
-                    if last_pc:  # At end of allocs, distribute everything
-                        outstanding_fraction -= aa.asset.value / total_assets
-                    else:  # Otherwise, distribute only requested fraction
+                    if not last_pc:
+                        # Non-final classes only claim their requested fraction;
+                        # the final class distributes everything below.
                         outstanding_fraction -= min(
                             aa.asset.value / total_assets,
                             aa.desired_fraction_of_total_assets,
                         )
 
-            if outstanding_fraction > 0:
+            if last_pc:
+                # The final priority class must absorb all remaining funds.
+                # Treat the min-value allocations as floors and split the rest
+                # proportionally to desired fractions (equally if none are set).
+                distribute_final_priority_class(
+                    list(priority_class), remaining_assets
+                )
+                remaining_assets = 0.0
+            elif outstanding_fraction > 0:
                 amount_to_allocate = outstanding_fraction * total_assets
                 factor = min(remaining_assets / amount_to_allocate, 1.0)
-                equal_fraction_if_unallocated = 0
-                if last_pc:
-                    if pc_total_fraction == 0:
-                        # Last priority class and no fraction requested, so distribute equally
-                        equal_fraction_if_unallocated = outstanding_fraction / len(
-                            priority_class
-                        )
-                    else:
-                        # Last priority class and fraction requested, so distribute proportionally
-                        # factor: (0, 1]
-                        # Normalize pc_total_fraction by the fraction of the total assets outstanding
-                        factor /= pc_total_fraction / outstanding_fraction
-
                 for aa in priority_class:
                     new_asset_value = max(
                         aa.asset.value,
-                        max(
-                            aa.desired_fraction_of_total_assets,
-                            equal_fraction_if_unallocated,
-                        )
-                        * factor
-                        * total_assets,
+                        aa.desired_fraction_of_total_assets * factor * total_assets,
                     )
                     remaining_assets -= new_asset_value - aa.asset.value
                     aa.asset.value = new_asset_value

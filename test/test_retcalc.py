@@ -219,6 +219,31 @@ class RetCalcTest(unittest.TestCase):
         self.assertAlmostEqual(rebalanced[1].asset.value, total * 0.3)
         self.assertAlmostEqual(rebalanced[2].asset.value, total * 0.2)
 
+    def test_rebalance_assets_single_priority_class_min_and_fraction(self):
+        # Regression: a single priority class combining minimum values and
+        # fractional allocations used to leave funds undistributed and trip
+        # rebalance_assets' own assertion. Fractions sum to 0.5 (< 1), so the
+        # final class must still absorb everything.
+        assets = [
+            AssetAllocation(Asset("A", 1000, 0, 0), 0, 300, 0.25),
+            AssetAllocation(Asset("B", 1000, 0, 0), 0, 300, 0.25),
+        ]
+        rebalanced = rebalance_assets_and_sanity_test(self, assets)
+        # Equal weights and floors below the proportional share, so split evenly.
+        self.assertAlmostEqual(rebalanced[0].asset.value, 1000)
+        self.assertAlmostEqual(rebalanced[1].asset.value, 1000)
+
+    def test_rebalance_assets_min_floor_exceeds_fraction(self):
+        # A minimum value forces one asset above its proportional fraction
+        # share; the floor is honored and the remainder fills the other asset.
+        assets = [
+            AssetAllocation(Asset("A", 500, 0, 0), 0, 800, 0.5),
+            AssetAllocation(Asset("B", 500, 0, 0), 0, 0, 0.5),
+        ]
+        rebalanced = rebalance_assets_and_sanity_test(self, assets)
+        self.assertAlmostEqual(rebalanced[0].asset.value, 800)
+        self.assertAlmostEqual(rebalanced[1].asset.value, 200)
+
 
 class RetirementValueTest(unittest.TestCase):
     def test_single_step_deterministic(self):
