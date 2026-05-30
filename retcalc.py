@@ -1,6 +1,6 @@
 from os import path, listdir, mkdir
 import random
-from typing import List, Optional, MutableSet, Tuple
+from typing import List, Optional, Tuple
 
 from prompt import choose, takebool, takefloat, takeint
 from rettypes import *
@@ -122,7 +122,9 @@ def retirement_value(retirementSettings: RetirementSettings) -> RetirementSettin
 def simulate(
     retirementSettings: RetirementSettings, n: int
 ) -> List[RetirementSettings]:
-    return [retirement_value(retirementSettings.copy()) for _ in range(n)]
+    # retirement_value already makes its own defensive copy and never mutates
+    # its input, so no copy is needed here.
+    return [retirement_value(retirementSettings) for _ in range(n)]
 
 
 def worst_case(runs: List[RetirementSettings], pmin: float):
@@ -242,14 +244,14 @@ def rebalance_assets(asset_allocations: List[AssetAllocation]) -> None:
     assert total_assets > 0
     remaining_assets = total_assets
 
-    priority_class: MutableSet[AssetAllocation] = set()
+    priority_class: List[AssetAllocation] = []
     priority = None
     pc_total_min_value = 0.0
     pc_total_fraction = 0.0
     for i, asset_alloc in enumerate(asset_allocations):
         if priority is None:
             priority = asset_alloc.priority
-        priority_class.add(asset_alloc)
+        priority_class.append(asset_alloc)
         pc_total_min_value += asset_alloc.minimum_value
         pc_total_fraction += asset_alloc.desired_fraction_of_total_assets
 
@@ -287,7 +289,7 @@ def rebalance_assets(asset_allocations: List[AssetAllocation]) -> None:
                 # Treat the min-value allocations as floors and split the rest
                 # proportionally to desired fractions (equally if none are set).
                 distribute_final_priority_class(
-                    list(priority_class), remaining_assets
+                    priority_class, remaining_assets
                 )
                 remaining_assets = 0.0
             elif outstanding_fraction > 0:
@@ -302,7 +304,7 @@ def rebalance_assets(asset_allocations: List[AssetAllocation]) -> None:
                     aa.asset.value = new_asset_value
 
             # Reset priority class
-            priority_class = set()
+            priority_class = []
             priority = None
             pc_total_min_value = 0.0
             pc_total_fraction = 0.0
@@ -446,8 +448,8 @@ def safe_ret_expenditure_prompt():
             ),
         )
         expenditure_reduction_frac = takefloat(
-            "Enter fraction of expenditure to reduce after a year where any asset "
-            + "performs worse than its mean return (0 to disable)",
+            "Enter fraction of expenditure to reduce after a year where the overall "
+            + "portfolio performs worse than its mean return (0 to disable)",
             0,
             1,
         )
