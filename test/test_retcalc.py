@@ -287,6 +287,48 @@ class RetirementValueTest(unittest.TestCase):
         self.assertGreater(result_yes.current_value(),
                            result_no.current_value())
 
+    @staticmethod
+    def _two_asset_rs(frac):
+        # Equal-weight, equal-mean assets so the portfolio mean is 0.10.
+        return RetirementSettings(
+            100, (0.02, 0.0), 2, 0,
+            AssetDistribution([
+                AssetAllocation(Asset("First", 1000, 0.10, 0.01), 0, 0, 0),
+                AssetAllocation(Asset("Last", 1000, 0.10, 0.01), 0, 0, 0),
+            ]), frac)
+
+    def test_expenditure_reduction_portfolio_underperforms(self):
+        # Both assets return below their mean, so the portfolio underperforms
+        # and next year's expenditure is reduced.
+        # gauss order per year: inflation, First_return, Last_return.
+        gauss_values = [
+            0.02, 0.05, 0.08,  # year 1: portfolio under 0.10
+            0.02, 0.12, 0.12,  # year 2
+        ]
+        with patch('random.gauss', side_effect=list(gauss_values)):
+            result_no = retirement_value(self._two_asset_rs(None))
+        with patch('random.gauss', side_effect=list(gauss_values)):
+            result_yes = retirement_value(self._two_asset_rs(0.5))
+
+        self.assertGreater(result_yes.current_value(),
+                           result_no.current_value())
+
+    def test_expenditure_reduction_portfolio_outperforms(self):
+        # One asset underperforms but the other more than compensates, so the
+        # overall portfolio beats its mean and no reduction is triggered.
+        gauss_values = [
+            0.02, 0.05, 0.20,  # year 1: First under, Last over -> portfolio over
+            0.02, 0.12, 0.12,  # year 2
+        ]
+        with patch('random.gauss', side_effect=list(gauss_values)):
+            result_no = retirement_value(self._two_asset_rs(None))
+        with patch('random.gauss', side_effect=list(gauss_values)):
+            result_yes = retirement_value(self._two_asset_rs(0.5))
+
+        # No reduction means the two runs are identical.
+        self.assertAlmostEqual(result_yes.current_value(),
+                               result_no.current_value())
+
     def test_negative_expenditure_skips_reduction(self):
         gauss_values = [0.02, 0.05, 0.02, 0.10]
 

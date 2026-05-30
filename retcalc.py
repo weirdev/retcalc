@@ -61,7 +61,7 @@ def retirement_value(retirementSettings: RetirementSettings) -> RetirementSettin
     """Main simulation loop.
 
     @expenditure_reduction_frac: Reduce next year's expenditure by this fraction after
-    a year where any asset performs worse than its mean return.
+    a year where the overall portfolio performs worse than its expected mean return.
     TODO: Allow for selecting particular assets."""
     new_rs = retirementSettings.copy()
 
@@ -92,17 +92,25 @@ def retirement_value(retirementSettings: RetirementSettings) -> RetirementSettin
             asset_alloc.minimum_value *= inflation_factor
 
         if not hit_zero:
+            # Value-weighted realized vs expected return across the portfolio.
+            weighted_return = 0.0
+            weighted_mean = 0.0
             for asset_alloc in new_rs.asset_distribution.asset_allocations:
                 asset_return = random.gauss(
                     asset_alloc.asset.mean_return, asset_alloc.asset.return_stdev
                 )
-                # If expenditure is negative, we are earning not spending
-                reduce_expenditure = (
-                    retirementSettings.expenditure_reduction_frac is not None
-                    and new_rs.expenditure > 0
-                    and asset_return < asset_alloc.asset.mean_return
-                )
+                value = asset_alloc.asset.value
+                weighted_return += value * asset_return
+                weighted_mean += value * asset_alloc.asset.mean_return
                 asset_alloc.asset.value *= 1 + asset_return
+            # Reduce next year's expenditure when the overall portfolio
+            # underperforms its expected mean return. (Negative expenditure
+            # means we are earning, not spending, so skip the reduction.)
+            reduce_expenditure = (
+                retirementSettings.expenditure_reduction_frac is not None
+                and new_rs.expenditure > 0
+                and weighted_return < weighted_mean
+            )
             rebalance_assets(new_rs.asset_distribution.asset_allocations)
 
         new_rs.expenditure *= inflation_factor
