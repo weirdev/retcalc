@@ -10,9 +10,16 @@
 0. Housekeeping
     - Tests
         - Basic data types -- Done
-        - simulate -- TODO
-        - worst case -- TODO
-        - reallocate -- TODO
+        - simulate -- Done
+        - worst case -- Done
+        - reallocate -- Done
+        - retirement_value -- Done
+        - inflated_val / inflated_payments -- Done
+        - insert_alloc_set_priority -- Done
+        - YAML save/load round-trip -- Done
+    - Bugs
+        - reduce_expenditure flag in retirement_value is reassigned each loop iteration instead of OR'd, so only the last asset's performance determines expenditure reduction (contradicts docstring's "any asset" intent)
+        - rebalance_assets fails its own assertion when a single priority class combines both minimum values and fractional allocation
     - Performance
         - Cleanup unnecessary copying
         - reallocate introduced some perf regressions, see if these can be mitigated

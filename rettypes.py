@@ -68,7 +68,7 @@ class AllocationSetting(Enum):
 
 
 class AllocationValue:
-    def __init__(self, allocation_setting, asset_setting=Optional[AssetSetting]):
+    def __init__(self, allocation_setting, asset_setting=None):
         self.allocation_setting = allocation_setting
         self.asset_setting = asset_setting
 
@@ -334,6 +334,8 @@ class RetirementSettings:
         ret_obj["t"] = self.t
         ret_obj["emergency_min"] = self.emergency_min
         ret_obj["asset_distribution"] = self.asset_distribution.to_structured()
+        if self.expenditure_reduction_frac is not None:
+            ret_obj["expenditure_reduction_frac"] = self.expenditure_reduction_frac
         return ret_obj
 
     def __eq__(self, other: object) -> bool:
@@ -344,6 +346,8 @@ class RetirementSettings:
             and self.t == other.t
             and self.emergency_min == other.emergency_min
             and self.asset_distribution == other.asset_distribution
+            and self.expenditure_reduction_frac
+            == other.expenditure_reduction_frac
         )
 
     def __hash__(self) -> int:
@@ -354,5 +358,6 @@ class RetirementSettings:
                 self.t,
                 self.emergency_min,
                 self.asset_distribution,
+                self.expenditure_reduction_frac,
             )
         )
