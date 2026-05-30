@@ -52,6 +52,18 @@ def takeint(prompt: str, lbound: Optional[float] = None,
             s = input("Not a valid integer\nEnter a valid integer: ")
 
 
+def take_optional_int(prompt: str) -> Optional[int]:
+    """Like takeint but blank input returns None."""
+    s = input(f"{prompt} (blank for none): ")
+    while True:
+        if s.strip() == "":
+            return None
+        try:
+            return int(s.strip())
+        except ValueError:
+            s = input("Not a valid integer\nEnter an integer or leave blank: ")
+
+
 def takefloat(prompt: str, lbound: Optional[float] = None,
               ubound: Optional[float] = None) -> float:
     slb = lbound if lbound is not None else "-inf"

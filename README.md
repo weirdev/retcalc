@@ -6,6 +6,19 @@
 
     python -m unittest
 
+## Methodology
+
+Optimizations (max safe expenditure / minimum required savings) binary-search a
+variable against a tail-risk constraint. To keep that search well-posed, the
+simulation shocks are sampled once per optimization and reused across every
+evaluation (common random numbers), so only the optimized variable changes
+between steps rather than the underlying randomness. This removes the
+run-to-run jitter that came from re-sampling the objective on each step.
+
+Each calculation also accepts an optional random seed. Leave it blank for a
+fresh random run (results are still stable within that run); supply an integer
+to reproduce a run exactly.
+
 ## Next Steps
 0. Housekeeping
     - Tests

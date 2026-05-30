@@ -2,7 +2,7 @@ from os import path, listdir, mkdir
 import random
 from typing import List, Optional, Tuple
 
-from prompt import choose, takebool, takefloat, takeint
+from prompt import choose, takebool, takefloat, takeint, take_optional_int
 from rettypes import *
 from yaml_helper import load_yaml, dump_yaml
 
@@ -57,8 +57,37 @@ def inflated_payments(payment: float, r: float, t: int) -> float:
     return total
 
 
-def retirement_value(retirementSettings: RetirementSettings) -> RetirementSettings:
+# Per simulation year: (inflation_z, [asset_z, ...]) of standard-normal shocks.
+PathNoise = List[Tuple[float, List[float]]]
+
+
+def build_noise_matrix(
+    n_paths: int, n_years: int, n_assets: int, rng: random.Random
+) -> List[PathNoise]:
+    """Pre-sample standard-normal shocks for a fixed simulation shape.
+
+    Reusing the same shocks across optimize_r_var evaluations gives common
+    random numbers (CRN): only the optimized variable changes between binary
+    search steps, so the objective is stable instead of re-sampled noise."""
+    return [
+        [
+            (rng.gauss(0, 1), [rng.gauss(0, 1) for _ in range(n_assets)])
+            for _ in range(n_years)
+        ]
+        for _ in range(n_paths)
+    ]
+
+
+def retirement_value(
+    retirementSettings: RetirementSettings, path_noise: Optional[PathNoise] = None
+) -> RetirementSettings:
     """Main simulation loop.
+
+    @path_noise: optional pre-sampled standard-normal shocks for this path,
+    indexed by year. When provided, inflation/return draws are derived as
+    mean + stdev * z from these shocks (equivalent to random.gauss(mean, stdev)
+    given the same z) so that simulations can be replayed deterministically.
+    When None, draws come from the global random module as before.
 
     @expenditure_reduction_frac: Reduce next year's expenditure by this fraction after
     a year where the overall portfolio performs worse than its expected mean return.
@@ -66,8 +95,12 @@ def retirement_value(retirementSettings: RetirementSettings) -> RetirementSettin
     new_rs = retirementSettings.copy()
 
     reduce_expenditure = False
+    yi = 0
     while new_rs.t > 0:
-        inflation_s = random.gauss(*new_rs.inflation)
+        if path_noise is None:
+            inflation_s = random.gauss(*new_rs.inflation)
+        else:
+            inflation_s = new_rs.inflation[0] + new_rs.inflation[1] * path_noise[yi][0]
         inflation_factor = 1 + inflation_s
 
         to_spend = new_rs.expenditure
@@ -95,10 +128,18 @@ def retirement_value(retirementSettings: RetirementSettings) -> RetirementSettin
             # Value-weighted realized vs expected return across the portfolio.
             weighted_return = 0.0
             weighted_mean = 0.0
-            for asset_alloc in new_rs.asset_distribution.asset_allocations:
-                asset_return = random.gauss(
-                    asset_alloc.asset.mean_return, asset_alloc.asset.return_stdev
-                )
+            for k, asset_alloc in enumerate(
+                new_rs.asset_distribution.asset_allocations
+            ):
+                if path_noise is None:
+                    asset_return = random.gauss(
+                        asset_alloc.asset.mean_return, asset_alloc.asset.return_stdev
+                    )
+                else:
+                    asset_return = (
+                        asset_alloc.asset.mean_return
+                        + asset_alloc.asset.return_stdev * path_noise[yi][1][k]
+                    )
                 value = asset_alloc.asset.value
                 weighted_return += value * asset_return
                 weighted_mean += value * asset_alloc.asset.mean_return
@@ -115,16 +156,21 @@ def retirement_value(retirementSettings: RetirementSettings) -> RetirementSettin
 
         new_rs.expenditure *= inflation_factor
         new_rs.t -= 1
+        yi += 1
 
     return new_rs
 
 
 def simulate(
-    retirementSettings: RetirementSettings, n: int
+    retirementSettings: RetirementSettings,
+    n: int,
+    noise_matrix: Optional[List[PathNoise]] = None,
 ) -> List[RetirementSettings]:
     # retirement_value already makes its own defensive copy and never mutates
     # its input, so no copy is needed here.
-    return [retirement_value(retirementSettings) for _ in range(n)]
+    if noise_matrix is None:
+        return [retirement_value(retirementSettings) for _ in range(n)]
+    return [retirement_value(retirementSettings, noise_matrix[i]) for i in range(n)]
 
 
 def worst_case(runs: List[RetirementSettings], pmin: float):
@@ -140,9 +186,19 @@ def optimize_r_var(
     r_var_to_opt: RValue,
     maximize: bool,
     pmin: float,
+    rng: Optional[random.Random] = None,
 ) -> float:
     low = 0
     high = 100
+
+    # Build the simulation shocks once and reuse them for every evaluation
+    # (common random numbers). t and the asset count are constant across the
+    # search, so a fixed-shape noise matrix keeps the objective stable instead
+    # of re-sampling noise on each binary search step. Pass a seeded rng for a
+    # fully reproducible run; otherwise results are stable within this call.
+    rng = rng or random.Random()
+    n_assets = len(retirementSettings.asset_distribution.asset_allocations)
+    noise = build_noise_matrix(10_000, retirementSettings.t, n_assets, rng)
 
     # r_val_print(retirementSettings)
     # input()
@@ -150,7 +206,7 @@ def optimize_r_var(
     # Find top end of range
     retirementSettings.update_val(r_var_to_opt, lambda _: high)
     while (
-        worst_case(simulate(retirementSettings, 10_000), pmin).current_value()
+        worst_case(simulate(retirementSettings, 10_000, noise), pmin).current_value()
         - retirementSettings.emergency_min
         < 0
     ) ^ maximize:
@@ -167,7 +223,7 @@ def optimize_r_var(
         mid = low + (diff / 2)
         retirementSettings.update_val(r_var_to_opt, lambda _: mid)
         if (
-            worst_case(simulate(retirementSettings, 10_000), pmin).current_value()
+            worst_case(simulate(retirementSettings, 10_000, noise), pmin).current_value()
             - retirementSettings.emergency_min
             > 0
         ) ^ maximize:
@@ -475,8 +531,16 @@ def safe_ret_expenditure_prompt():
         0,
         1,
     )
+    seed = take_optional_int("Random seed for reproducible results")
+    rng = random.Random(seed) if seed is not None else random.Random()
     print("Simulating 10,000 possible scenarios...")
-    runs = simulate(current_state, 10_000)
+    projection_noise = build_noise_matrix(
+        10_000,
+        current_state.t,
+        len(current_state.asset_distribution.asset_allocations),
+        rng,
+    )
+    runs = simulate(current_state, 10_000, projection_noise)
     result_setting = worst_case(runs, wcp)
 
     retwealth = result_setting.current_value()
@@ -490,7 +554,9 @@ def safe_ret_expenditure_prompt():
     retirement_start = result_setting.copy()
     retirement_start.expenditure = 0
     retirement_start.t = t
-    maxexp = optimize_r_var(retirement_start, RValue(RSetting.EXPENDITURE), True, wcp)
+    maxexp = optimize_r_var(
+        retirement_start, RValue(RSetting.EXPENDITURE), True, wcp, rng
+    )
     print(f"Maximum safe yearly expenditure in retirement: ${maxexp:,.2f}")
 
     print()
@@ -550,6 +616,8 @@ def savings_required_for_expenditure_prompt():
         0,
         1,
     )
+    seed = take_optional_int("Random seed for reproducible results")
+    rng = random.Random(seed) if seed is not None else random.Random()
 
     print()
     print("Binary searching possible retirement scenarios 10,000 times each...")
@@ -571,6 +639,7 @@ def savings_required_for_expenditure_prompt():
         ),  # type: ignore
         False,
         wcp,
+        rng,
     )
     print(f"Minimum safe equity savings for retirement: ${maxexp:,.2f}")
 

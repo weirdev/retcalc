@@ -422,6 +422,84 @@ class SimulationTest(unittest.TestCase):
         self.assertAlmostEqual(result.current_value(), 100)
 
 
+class NoiseMatrixTest(unittest.TestCase):
+    def test_shape(self):
+        matrix = build_noise_matrix(5, 3, 4, random.Random(0))
+        self.assertEqual(len(matrix), 5)
+        for path in matrix:
+            self.assertEqual(len(path), 3)
+            for inflation_z, asset_zs in path:
+                self.assertIsInstance(inflation_z, float)
+                self.assertEqual(len(asset_zs), 4)
+
+    def test_determinism_same_seed(self):
+        a = build_noise_matrix(4, 3, 2, random.Random(7))
+        b = build_noise_matrix(4, 3, 2, random.Random(7))
+        self.assertEqual(a, b)
+
+    def test_different_seeds_differ(self):
+        a = build_noise_matrix(4, 3, 2, random.Random(7))
+        b = build_noise_matrix(4, 3, 2, random.Random(8))
+        self.assertNotEqual(a, b)
+
+
+class PathNoiseTest(unittest.TestCase):
+    def test_path_noise_matches_direct_transform(self):
+        # A single year, single asset: result must equal the explicit
+        # mean + stdev * z transform applied to the supplied shocks.
+        inflation_z = 0.3
+        asset_z = -0.7
+        path_noise = [(inflation_z, [asset_z])]
+
+        asset = Asset("Stock", 1000, 0.05, 0.01)
+        alloc = AssetAllocation(asset, 0, 0, 0)
+        rs = RetirementSettings(50, (0.02, 0.005), 1, 0,
+                                AssetDistribution([alloc]), None)
+        result = retirement_value(rs, path_noise)
+
+        inflation_s = 0.02 + 0.005 * inflation_z
+        asset_return = 0.05 + 0.01 * asset_z
+        expected_value = (1000 - 50) * (1 + asset_return)
+        expected_expenditure = 50 * (1 + inflation_s)
+
+        self.assertEqual(result.t, 0)
+        self.assertAlmostEqual(
+            result.asset_distribution.asset_allocations[0].asset.value,
+            expected_value)
+        self.assertAlmostEqual(result.expenditure, expected_expenditure)
+
+    def test_path_noise_replays_deterministically(self):
+        path_noise = build_noise_matrix(1, 5, 1, random.Random(123))[0]
+        asset = Asset("Stock", 1000, 0.05, 0.01)
+        rs = RetirementSettings(
+            50, (0.02, 0.005), 5, 0,
+            AssetDistribution([AssetAllocation(asset, 0, 0, 0)]), None)
+        first = retirement_value(rs, path_noise)
+        second = retirement_value(rs, path_noise)
+        self.assertAlmostEqual(first.current_value(), second.current_value())
+
+
+class OptimizeCRNTest(unittest.TestCase):
+    @staticmethod
+    def _scenario():
+        return RetirementSettings(
+            0, (0.02, 0.005), 10, 0,
+            AssetDistribution([
+                AssetAllocation(Asset("Stock", 500000, 0.06, 0.12), 0, 0, 0),
+            ]), None)
+
+    def test_seeded_optimize_is_reproducible(self):
+        # Same seed -> identical binary search result (common random numbers
+        # make the noisy objective stable instead of jittering run-to-run).
+        a = optimize_r_var(
+            self._scenario(), RValue(RSetting.EXPENDITURE), True, 0.1,
+            random.Random(42))
+        b = optimize_r_var(
+            self._scenario(), RValue(RSetting.EXPENDITURE), True, 0.1,
+            random.Random(42))
+        self.assertAlmostEqual(a, b)
+
+
 class InflationTest(unittest.TestCase):
     def test_inflated_val_basic(self):
         self.assertAlmostEqual(
