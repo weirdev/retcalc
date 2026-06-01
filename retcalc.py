@@ -1,6 +1,6 @@
 from os import path, listdir, mkdir
 import random
-from typing import List, Optional, Tuple
+from typing import List, NamedTuple, Optional, Tuple
 
 from prompt import choose, takebool, takefloat, takeint, take_optional_int
 from rettypes import *
@@ -8,6 +8,9 @@ from yaml_helper import load_yaml, dump_yaml
 
 
 SAVED_SCENARIOS_DIRNAME = "savedscenarios"
+
+# Number of Monte Carlo paths simulated per projection / optimization.
+N_SIMULATIONS = 10_000
 
 
 def save_retirement_settings(
@@ -181,6 +184,50 @@ def worst_case(runs: List[RetirementSettings], pmin: float):
     return runs[int(len(runs) * pmin)]
 
 
+SUMMARY_PERCENTILES = [0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95]
+
+
+class DistributionSummary(NamedTuple):
+    n: int
+    percentiles: List[Tuple[float, float]]  # (p, ending value at p)
+    prob_below_emergency: float  # fraction of runs ending < emergency_min
+    prob_below_zero: float  # fraction of runs ending < 0
+
+
+def summarize_runs(
+    runs: List[RetirementSettings],
+    emergency_min: float,
+    percentiles: List[float] = SUMMARY_PERCENTILES,
+) -> DistributionSummary:
+    """Summarize a set of simulation runs as a distribution of ending values.
+
+    Reports the requested percentiles of final portfolio value and the
+    probability of ruin (ending below the emergency minimum, and below zero).
+    Percentiles use the same int(n * p) index convention as worst_case so a
+    given p matches what worst_case would return at the same tail probability."""
+    values = sorted(rs.current_value() for rs in runs)
+    n = len(values)
+    pcts = [(p, values[min(int(n * p), n - 1)]) for p in percentiles]
+    below_emergency = sum(1 for v in values if v < emergency_min) / n
+    below_zero = sum(1 for v in values if v < 0) / n
+    return DistributionSummary(n, pcts, below_emergency, below_zero)
+
+
+def print_distribution_summary(summary: DistributionSummary, title: str) -> None:
+    print(title)
+    for p, v in summary.percentiles:
+        print(f"  {('p' + str(int(p * 100))):>4}  ${v:>16,.2f}")
+    print(
+        f"  {'ruin':>4}  {summary.prob_below_emergency * 100:5.1f}% "
+        "end below emergency minimum"
+    )
+    if summary.prob_below_zero != summary.prob_below_emergency:
+        print(
+            f"  {'':>4}  {summary.prob_below_zero * 100:5.1f}% "
+            "end fully depleted (< $0)"
+        )
+
+
 def optimize_r_var(
     retirementSettings: RetirementSettings,
     r_var_to_opt: RValue,
@@ -198,7 +245,7 @@ def optimize_r_var(
     # fully reproducible run; otherwise results are stable within this call.
     rng = rng or random.Random()
     n_assets = len(retirementSettings.asset_distribution.asset_allocations)
-    noise = build_noise_matrix(10_000, retirementSettings.t, n_assets, rng)
+    noise = build_noise_matrix(N_SIMULATIONS, retirementSettings.t, n_assets, rng)
 
     # r_val_print(retirementSettings)
     # input()
@@ -206,7 +253,9 @@ def optimize_r_var(
     # Find top end of range
     retirementSettings.update_val(r_var_to_opt, lambda _: high)
     while (
-        worst_case(simulate(retirementSettings, 10_000, noise), pmin).current_value()
+        worst_case(
+            simulate(retirementSettings, N_SIMULATIONS, noise), pmin
+        ).current_value()
         - retirementSettings.emergency_min
         < 0
     ) ^ maximize:
@@ -223,7 +272,9 @@ def optimize_r_var(
         mid = low + (diff / 2)
         retirementSettings.update_val(r_var_to_opt, lambda _: mid)
         if (
-            worst_case(simulate(retirementSettings, 10_000, noise), pmin).current_value()
+            worst_case(
+                simulate(retirementSettings, N_SIMULATIONS, noise), pmin
+            ).current_value()
             - retirementSettings.emergency_min
             > 0
         ) ^ maximize:
@@ -533,24 +584,26 @@ def safe_ret_expenditure_prompt():
     )
     seed = take_optional_int("Random seed for reproducible results")
     rng = random.Random(seed) if seed is not None else random.Random()
-    print("Simulating 10,000 possible scenarios...")
+    print(f"Simulating {N_SIMULATIONS:,} possible scenarios...")
+    n_assets = len(current_state.asset_distribution.asset_allocations)
     projection_noise = build_noise_matrix(
-        10_000,
-        current_state.t,
-        len(current_state.asset_distribution.asset_allocations),
-        rng,
+        N_SIMULATIONS, current_state.t, n_assets, rng
     )
-    runs = simulate(current_state, 10_000, projection_noise)
+    runs = simulate(current_state, N_SIMULATIONS, projection_noise)
     result_setting = worst_case(runs, wcp)
 
-    retwealth = result_setting.current_value()
-    print(f"Estimated new worth at end of earning years: ${retwealth:,.2f}")
+    print()
+    print_distribution_summary(
+        summarize_runs(runs, current_state.emergency_min),
+        "Projected net worth at end of earning years:",
+    )
 
     print()
     t = takeint("Enter estimated whole number of years of retirement", lbound=1)
 
     print()
-    print("Binary searching possible retirement scenarios 10,000 times each...")
+    print(f"Binary searching possible retirement scenarios {N_SIMULATIONS:,} "
+          "times each...")
     retirement_start = result_setting.copy()
     retirement_start.expenditure = 0
     retirement_start.t = t
@@ -558,6 +611,24 @@ def safe_ret_expenditure_prompt():
         retirement_start, RValue(RSetting.EXPENDITURE), True, wcp, rng
     )
     print(f"Maximum safe yearly expenditure in retirement: ${maxexp:,.2f}")
+
+    print()
+    final_state = retirement_start.copy()
+    final_state.update_val(RValue(RSetting.EXPENDITURE), lambda _: maxexp)
+    final_runs = simulate(
+        final_state,
+        N_SIMULATIONS,
+        build_noise_matrix(N_SIMULATIONS, final_state.t, n_assets, rng),
+    )
+    # These outcomes start from the conservative tail portfolio used to size the
+    # expenditure (the worst_case(runs, wcp) net worth above), NOT the median of
+    # the projection. So this distribution is conditioned on a pessimistic
+    # starting balance and is intentionally lower than the projection above.
+    print_distribution_summary(
+        summarize_runs(final_runs, final_state.emergency_min),
+        f"Retirement outcomes at this expenditure (starting from the "
+        f"conservative ~{wcp:.0%} tail net worth above):",
+    )
 
     print()
     if takebool("Save retirement scenario to disk?"):
@@ -620,28 +691,41 @@ def savings_required_for_expenditure_prompt():
     rng = random.Random(seed) if seed is not None else random.Random()
 
     print()
-    print("Binary searching possible retirement scenarios 10,000 times each...")
+    print(f"Binary searching possible retirement scenarios {N_SIMULATIONS:,} "
+          "times each...")
     # ignore
     asset_value = AllocationValue(
         AllocationSetting.ASSET, AssetSetting.VALUE  # type:ignore
     )
+    n_assets = len(retirement_scenario.asset_distribution.asset_allocations)
+    savings_rvalue = RValue(
+        RSetting.ASSET_DISTRIBUTION,
+        DistributionValue(
+            DistributionSetting.ASSET_ALLOCATIONS,
+            (n_assets - 1, asset_value),
+        ),
+    )
     maxexp = optimize_r_var(
         retirement_scenario,
-        RValue(
-            RSetting.ASSET_DISTRIBUTION,
-            DistributionValue(
-                DistributionSetting.ASSET_ALLOCATIONS,
-                (
-                    len(retirement_scenario.asset_distribution.asset_allocations) - 1,
-                    asset_value,
-                ),
-            ),
-        ),  # type: ignore
+        savings_rvalue,  # type: ignore
         False,
         wcp,
         rng,
     )
     print(f"Minimum safe equity savings for retirement: ${maxexp:,.2f}")
+
+    print()
+    final_state = retirement_scenario.copy()
+    final_state.update_val(savings_rvalue, lambda _: maxexp)
+    final_runs = simulate(
+        final_state,
+        N_SIMULATIONS,
+        build_noise_matrix(N_SIMULATIONS, final_state.t, n_assets, rng),
+    )
+    print_distribution_summary(
+        summarize_runs(final_runs, final_state.emergency_min),
+        "Retirement outcomes at this savings level:",
+    )
 
 
 def rewrite_retirement_scenario_prompt():

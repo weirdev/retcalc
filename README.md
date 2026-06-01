@@ -19,6 +19,21 @@ Each calculation also accepts an optional random seed. Leave it blank for a
 fresh random run (results are still stable within that run); supply an integer
 to reproduce a run exactly.
 
+Results are reported as a distribution rather than a single number. Each
+projection prints a percentile table of ending portfolio value
+(p5/p10/p25/p50/p75/p90/p95) along with the probability of ruin (the fraction
+of simulated paths ending below the emergency minimum). The optimizers also
+re-simulate at their chosen answer (maximum safe expenditure / minimum required
+savings) and report that same distribution of retirement outcomes.
+
+Note that the max-expenditure flow sizes the safe expenditure against a
+*conservative* starting portfolio: it enters retirement from the tail-probability
+(`wcp`) net worth of the accumulation projection, not its median. The reported
+"Retirement outcomes at this expenditure" distribution is therefore conditioned
+on that pessimistic starting balance and will read lower than the projection
+above it — this is by design, so the expenditure stays safe even in a poor
+accumulation outcome.
+
 ## Next Steps
 0. Housekeeping
     - Tests

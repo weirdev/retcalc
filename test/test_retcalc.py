@@ -1,6 +1,8 @@
+import io
 import os
 import random
 import tempfile
+from contextlib import redirect_stdout
 from typing import Dict, Iterable, List
 import unittest
 from unittest.mock import patch
@@ -420,6 +422,67 @@ class SimulationTest(unittest.TestCase):
         runs = [make_rs(v) for v in [100, 200, 300]]
         result = worst_case(runs, 0.0)
         self.assertAlmostEqual(result.current_value(), 100)
+
+
+class DistributionSummaryTest(unittest.TestCase):
+    @staticmethod
+    def _runs(values):
+        return [
+            RetirementSettings(
+                0, (0, 0), 0, 0,
+                AssetDistribution([
+                    AssetAllocation(Asset("A", v, 0, 0), 0, 0, 0)
+                ]), None)
+            for v in values
+        ]
+
+    def test_percentile_indexing_matches_worst_case(self):
+        values = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]
+        runs = self._runs(values)
+        summary = summarize_runs(runs, emergency_min=0)
+        by_p = dict(summary.percentiles)
+        n = len(values)
+        sorted_values = sorted(values)
+        for p in SUMMARY_PERCENTILES:
+            expected = sorted_values[int(n * p)]
+            self.assertAlmostEqual(by_p[p], expected)
+            # Same convention worst_case uses at the same tail probability.
+            self.assertAlmostEqual(
+                worst_case(runs, p).current_value(), expected)
+
+    def test_prob_below_emergency(self):
+        # Values 100..1000; emergency_min 450 -> 100,200,300,400 are below (4/10).
+        runs = self._runs([100, 200, 300, 400, 500, 600, 700, 800, 900, 1000])
+        summary = summarize_runs(runs, emergency_min=450)
+        self.assertAlmostEqual(summary.prob_below_emergency, 0.4)
+
+    def test_prob_below_emergency_all_and_none(self):
+        runs = self._runs([10, 20, 30, 40])
+        self.assertAlmostEqual(
+            summarize_runs(runs, emergency_min=1000).prob_below_emergency, 1.0)
+        self.assertAlmostEqual(
+            summarize_runs(runs, emergency_min=0).prob_below_emergency, 0.0)
+
+    def test_below_zero_differs_from_below_emergency(self):
+        # Two runs below zero, two more below a positive emergency min.
+        runs = self._runs([-50, -10, 100, 500])
+        summary = summarize_runs(runs, emergency_min=200)
+        self.assertAlmostEqual(summary.prob_below_zero, 0.5)  # -50, -10
+        self.assertAlmostEqual(
+            summary.prob_below_emergency, 0.75)  # -50, -10, 100
+        self.assertNotEqual(
+            summary.prob_below_zero, summary.prob_below_emergency)
+
+    def test_print_distribution_summary_smoke(self):
+        runs = self._runs([100, 200, 300, 400, 500])
+        summary = summarize_runs(runs, emergency_min=0)
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            print_distribution_summary(summary, "Title here:")
+        output = buf.getvalue()
+        self.assertIn("Title here:", output)
+        self.assertIn("p50", output)
+        self.assertIn("ruin", output)
 
 
 class NoiseMatrixTest(unittest.TestCase):
